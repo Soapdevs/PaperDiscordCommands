@@ -1,0 +1,4 @@
+commands:
+  hello: "say Hello from Discord!"
+  time: "time set day"
+  # Add more command mappings as needed
