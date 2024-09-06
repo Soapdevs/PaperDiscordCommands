@@ -1,12 +1,13 @@
 package etc.soap.paperDiscord;
 
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
-import net.dv8tion.jda.api.entities.Activity;
+import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
@@ -49,6 +50,7 @@ public class PaperDiscord extends JavaPlugin {
                 if (guild != null) {
                     // Fetch all existing commands
                     guild.retrieveCommands().queue(existingCommands -> {
+                        event.getJDA().getPresence().setActivity(Activity.playing("Balanced Guild"));
                         // Define the commands you want to keep
                         List<String> commandsToKeep = List.of("boostperks", "reload");
 
@@ -59,14 +61,6 @@ public class PaperDiscord extends JavaPlugin {
                             }
                         }
                     });
-
-                    // Set custom status
-                    String status = getConfig().getString("discord.status");
-                    if (status != null && !status.isEmpty()) {
-                        event.getJDA().getPresence().setActivity(Activity.playing(status));
-                    } else {
-                        getLogger().warning("Custom status not configured.");
-                    }
                 } else {
                     getLogger().severe("Guild not found.");
                 }
