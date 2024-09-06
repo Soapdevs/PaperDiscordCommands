@@ -1,0 +1,5 @@
+name: PaperDiscord
+version: '1.0'
+main: etc.soap.paperDiscord.PaperDiscord
+api-version: '1.21'
+authors: [ Soap ]
