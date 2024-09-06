@@ -111,6 +111,6 @@ public class DiscordCommandListener extends ListenerAdapter {
         }
 
         plugin.reloadConfig();
-        event.reply("Configuration reloaded successfully!").setEphemeral(true).queue();
+        event.reply("Configuration has successfully reloaded!").setEphemeral(true).queue();
     }
 }
