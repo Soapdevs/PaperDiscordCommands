@@ -50,7 +50,7 @@ public class PaperDiscord extends JavaPlugin {
                     guild.retrieveCommands().queue(existingCommands -> {
                         event.getJDA().getPresence().setActivity(Activity.watching("Balanced Guild"));
                         // Define the commands you want to keep
-                        List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks");
+                        List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk");
 
                         // Remove commands not in the list
                         for (Command command : existingCommands) {
