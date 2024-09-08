@@ -5,7 +5,6 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.commands.Command;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import org.bukkit.Bukkit;
@@ -18,6 +17,9 @@ public class DiscordCommandListener extends ListenerAdapter {
 
     private final JavaPlugin plugin;
     private final Map<String, Boolean> usedBoostPerksMap = new HashMap<>();
+    private final Map<String, Boolean> usedBalancedPerksMap = new HashMap<>();
+    private final Map<String, Boolean> usedSteadyPerksMap = new HashMap<>();
+
 
     public DiscordCommandListener(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -40,6 +42,10 @@ public class DiscordCommandListener extends ListenerAdapter {
                     guild.updateCommands().addCommands(
                             Commands.slash("boostperks", "Give perks to a Minecraft player.")
                                     .addOption(OptionType.STRING, "name", "The Minecraft player to receive the perks."),
+                            Commands.slash("balancedperks", "Give balanced perks to a Minecraft player.")
+                                    .addOption(OptionType.STRING, "name", "The Minecraft player to receive the balanced perks."),
+                            Commands.slash("steadyperks", "Give steady perks to a Minecraft player.")
+                                    .addOption(OptionType.STRING, "name", "The Minecraft player to receive the steady perks."),
                             Commands.slash("reload", "Reloads the bot's configuration.")
                     ).queue();
                 } else {
@@ -58,6 +64,10 @@ public class DiscordCommandListener extends ListenerAdapter {
             case "reload":
                 handleReloadCommand(event);
                 break;
+            case "balancedperks":
+                handleBalancedPerksCommand(event);
+            case "steadyperks":
+                handleSteadyPerksCommand(event);
             default:
                 event.reply("Unknown command").setEphemeral(true).queue();
         }
@@ -99,18 +109,111 @@ public class DiscordCommandListener extends ListenerAdapter {
         event.reply("Successfully executed the perks for player **" + playerName + "**!").queue();
     }
 
-    private void handleReloadCommand(SlashCommandInteractionEvent event) {
-        String discordRoleId = plugin.getConfig().getString("discord.ownerID");
-        // Reload the configuration
-        boolean hasRole = event.getMember().getRoles().stream()
-                .anyMatch(role -> role.getIdLong() == Long.parseLong(discordRoleId));
+    private void handleBalancedPerksCommand(SlashCommandInteractionEvent event) {
+        String discordRoleId = plugin.getConfig().getString("discord.balancedperks.allowedRole");
+        String minecraftCommand = plugin.getConfig().getString("discord.balancedperks.minecraftCommand");
 
-        if (!hasRole) {
+        if (discordRoleId == null || discordRoleId.isEmpty()) {
+            event.reply("Role not configured properly. Please contact an admin.").setEphemeral(true).queue();
+            return;
+        }
+
+        try {
+            // Check if the user has the required role
+            boolean hasRole = event.getMember().getRoles().stream()
+                    .anyMatch(role -> role.getIdLong() == Long.parseLong(discordRoleId));
+
+            if (!hasRole) {
+                event.reply("You don't have permission to use this command.").setEphemeral(true).queue();
+                return;
+            }
+        } catch (NumberFormatException e) {
+            event.reply("Role ID is invalid. Please contact an admin.").setEphemeral(true).queue();
+            return;
+        }
+
+        // Check if the user has already used the command
+        String userId = event.getUser().getId();
+        if (usedBalancedPerksMap.containsKey(userId)) {
+            event.reply("You have already claimed your perks!").setEphemeral(true).queue();
+            return;
+        }
+
+        // Retrieve the player's name from the command option
+        String playerName = event.getOption("name").getAsString();
+
+        // Replace the {name} placeholder in the command with the actual player name
+        String finalCommand = minecraftCommand.replace("{name}", playerName);
+
+        // Run the Minecraft command on the main server thread
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCommand);
+        });
+
+        // Mark the user as having used the command
+        usedBalancedPerksMap.put(userId, true);
+        event.reply("Successfully executed the perks for player **" + playerName + "**!").queue();
+    }
+
+    private void handleSteadyPerksCommand(SlashCommandInteractionEvent event) {
+        // Use the correct config key for Steady Perks
+        String discordRoleId = plugin.getConfig().getString("discord.steadyperks.allowedRole");
+        String minecraftCommand = plugin.getConfig().getString("discord.steadyperks.minecraftCommand");
+
+        if (discordRoleId == null || discordRoleId.isEmpty()) {
+            event.reply("Role not configured properly. Please contact an admin.").setEphemeral(true).queue();
+            System.err.println("Error: Role ID for Steady Perks is null or empty.");
+            return;
+        }
+
+        try {
+            System.out.println("Steady Perks Role ID: " + discordRoleId);
+
+            boolean hasRole = event.getMember().getRoles().stream()
+                    .anyMatch(role -> role.getIdLong() == Long.parseLong(discordRoleId));
+
+            if (!hasRole) {
+                event.reply("You don't have permission to use this command.").setEphemeral(true).queue();
+                return;
+            }
+        } catch (NumberFormatException e) {
+            event.reply("Role ID is invalid. Please contact an admin.").setEphemeral(true).queue();
+            System.err.println("Error: Invalid role ID for Steady Perks. Role ID: " + discordRoleId);
+            e.printStackTrace();
+            return;
+        }
+
+        String userId = event.getUser().getId();
+        if (usedSteadyPerksMap.containsKey(userId)) {
+            event.reply("You have already claimed your perks!").setEphemeral(true).queue();
+            return;
+        }
+
+        String playerName = event.getOption("name").getAsString();
+        String finalCommand = minecraftCommand.replace("{name}", playerName);
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), finalCommand);
+        });
+
+        usedSteadyPerksMap.put(userId, true);
+        event.reply("Successfully executed the perks for player **" + playerName + "**!").queue();
+    }
+
+    private void handleReloadCommand(SlashCommandInteractionEvent event) {
+        String discordOwnerId = plugin.getConfig().getString("discord.ownerID");
+
+        // Check if the user is the owner (by comparing user ID)
+        boolean isOwner = event.getUser().getId().equals(discordOwnerId);
+
+        if (!isOwner) {
             event.reply("You don't have permission to use this command.").setEphemeral(true).queue();
             return;
         }
 
+        // Reload the configuration
         plugin.reloadConfig();
-        event.reply("Configuration has successfully reloaded!").setEphemeral(true).queue();
+        event.reply("Configuration reloaded successfully!").queue();
     }
+
 }

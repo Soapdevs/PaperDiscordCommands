@@ -6,8 +6,6 @@ import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.Command;
-import net.dv8tion.jda.api.interactions.commands.build.Commands;
-import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.List;
@@ -50,9 +48,9 @@ public class PaperDiscord extends JavaPlugin {
                 if (guild != null) {
                     // Fetch all existing commands
                     guild.retrieveCommands().queue(existingCommands -> {
-                        event.getJDA().getPresence().setActivity(Activity.playing("Balanced Guild"));
+                        event.getJDA().getPresence().setActivity(Activity.watching("Balanced Guild"));
                         // Define the commands you want to keep
-                        List<String> commandsToKeep = List.of("boostperks", "reload");
+                        List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks");
 
                         // Remove commands not in the list
                         for (Command command : existingCommands) {

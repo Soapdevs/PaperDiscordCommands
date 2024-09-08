@@ -19,3 +19,19 @@ discord:
     
     # The Minecraft command to execute
     minecraftCommand: "give {name} minecraft:diamond 1"
+
+  # Balanced Perks Command Configuration
+  balancedperks:
+    # The role ID required to use the /balancedperks command
+    allowedRole: "YOUR_REQUIRED_ROLE_ID"
+
+    # The Minecraft command to execute
+    minecraftCommand: "give {name} minecraft:diamond 1"
+
+  # Steady Perks Command Configuration
+  steadyperks:
+    # The role ID required to use the /steadyperks command
+    allowedRole: "YOUR_REQUIRED_ROLE_ID"
+
+    # The Minecraft command to execute
+    minecraftCommand: "give {name} minecraft:diamond 1"
