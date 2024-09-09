@@ -100,10 +100,10 @@
         }
 
 
-
         private void handleServerStatusCommand(SlashCommandInteractionEvent event) {
             String serverIp = plugin.getConfig().getString("minecraft.server-ip");
-            String apiUrl = "https://api.mcsrvstat.us/2/" + serverIp; // Minecraft Server Status API
+            int serverPort = plugin.getConfig().getInt("minecraft.server-port", 25565); // Default to 25565 if not set
+            String apiUrl = "https://api.mcsrvstat.us/2/" + serverIp + ":" + serverPort; // Add port to the API URL
 
             // Make an asynchronous request to get server status
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
