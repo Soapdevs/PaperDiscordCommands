@@ -36,7 +36,7 @@ discord:
     # The Minecraft command to execute
     minecraftCommand: "give {name} minecraft:diamond 1"
 
-# Server status configuration
+# Server status configuration /serverstatus
 server-status:
   ip: "your.server.ip"  # Minecraft server IP
   port: 25565  # Minecraft server port (default is 25565)
