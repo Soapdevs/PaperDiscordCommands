@@ -10,7 +10,15 @@
     import net.dv8tion.jda.api.interactions.commands.build.Commands;
     import org.bukkit.Bukkit;
     import org.bukkit.plugin.java.JavaPlugin;
+    import com.google.gson.Gson;
+    import com.google.gson.JsonObject;
+    import okhttp3.OkHttpClient;
+    import okhttp3.Request;
+    import okhttp3.Response;
+    import net.dv8tion.jda.api.EmbedBuilder;
 
+    import java.awt.*;
+    import java.io.IOException;
     import java.util.HashMap;
     import java.util.Map;
 
@@ -21,6 +29,8 @@
         private final Map<String, Boolean> usedBalancedPerksMap = new HashMap<>();
         private final Map<String, Boolean> usedSteadyPerksMap = new HashMap<>();
 
+
+        private final OkHttpClient httpClient = new OkHttpClient(); // HTTP client for server status
 
         public DiscordCommandListener(JavaPlugin plugin) {
             this.plugin = plugin;
@@ -50,7 +60,9 @@
                                 Commands.slash("reload", "Reloads the bot's configuration."),
                                 Commands.slash("resetperk", "Reset perks for a player.")
                                         .addOption(OptionType.STRING, "perk", "The type of perk to reset (booster/balanced/steady).")
-                                        .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset.")
+                                        .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
+                                Commands.slash("serverstatus", "Check the Minecraft server status.") // Add the server status command
+
                         ).queue();
                     } else {
                         System.err.println("Guild not found.");
@@ -58,6 +70,8 @@
                 }
             });
         }
+
+
 
         public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
             switch (event.getName()) {
@@ -76,11 +90,64 @@
                 case "reload":
                     handleReloadCommand(event);
                     break;
+                case "serverstatus":
+                    handleServerStatusCommand(event);
+                    break;
                 default:
                     event.reply("Unknown command").setEphemeral(true).queue();
                     break;
             }
         }
+
+
+
+        private void handleServerStatusCommand(SlashCommandInteractionEvent event) {
+            String serverIp = plugin.getConfig().getString("minecraft.server-ip");
+            String apiUrl = "https://api.mcsrvstat.us/2/" + serverIp; // Minecraft Server Status API
+
+            // Make an asynchronous request to get server status
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    Request request = new Request.Builder().url(apiUrl).build();
+                    Response response = httpClient.newCall(request).execute();
+
+                    if (!response.isSuccessful()) {
+                        event.reply("Failed to retrieve server status.").queue();
+                        return;
+                    }
+
+                    String jsonResponse = response.body().string();
+                    JsonObject json = new Gson().fromJson(jsonResponse, JsonObject.class);
+
+                    // Check if the server is online
+                    boolean online = json.get("online").getAsBoolean();
+                    if (!online) {
+                        event.reply("The server is currently offline.").queue();
+                        return;
+                    }
+
+                    // Fetch player count and other details
+                    int onlinePlayers = json.getAsJsonObject("players").get("online").getAsInt();
+                    int maxPlayers = json.getAsJsonObject("players").get("max").getAsInt();
+                    String serverVersion = json.get("version").getAsString();
+
+                    // Create an embedded message for the status
+                    EmbedBuilder embed = new EmbedBuilder()
+                            .setTitle("Minecraft Server Status")
+                            .setColor(Color.GREEN)
+                            .addField("Server IP", serverIp, true)
+                            .addField("Version", serverVersion, true)
+                            .addField("Online Players", onlinePlayers + "/" + maxPlayers, false)
+                            .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl());
+
+                    event.replyEmbeds(embed.build()).queue();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    event.reply("An error occurred while retrieving server status.").queue();
+                }
+            });
+        }
+
 
 
         private void handleResetPerkCommand(SlashCommandInteractionEvent event) {

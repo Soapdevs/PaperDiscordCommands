@@ -35,3 +35,11 @@ discord:
 
     # The Minecraft command to execute
     minecraftCommand: "give {name} minecraft:diamond 1"
+
+# Server status configuration
+server-status:
+  ip: "your.server.ip"  # Minecraft server IP
+  port: 25565  # Minecraft server port (default is 25565)
+  online-message: "The server is currently **online** with {playerCount}/{maxPlayers} players."
+  offline-message: "The server is currently **offline**."
+  timeout-seconds: 5  # Timeout duration for the server status request
