@@ -99,49 +99,62 @@
             }
         }
 
-
         private void handleServerStatusCommand(SlashCommandInteractionEvent event) {
-            String serverIp = plugin.getConfig().getString("minecraft.server-ip");
-            int serverPort = plugin.getConfig().getInt("minecraft.server-port", 25565); // Default to 25565 if not set
-            String apiUrl = "https://api.mcsrvstat.us/2/" + serverIp + ":" + serverPort; // Add port to the API URL
+            String apiUrl = "https://api.mcsrvstat.us/2/balancedguild.com"; // change ip here if you need to...
 
             // Make an asynchronous request to get server status
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 try {
+                    // Build the request for the server status API
                     Request request = new Request.Builder().url(apiUrl).build();
                     Response response = httpClient.newCall(request).execute();
 
+                    // Check if the API response was successful
                     if (!response.isSuccessful()) {
+                        System.out.println("API request failed with status code: " + response.code()); // Debug
                         event.reply("Failed to retrieve server status.").queue();
                         return;
                     }
 
+                    // Get the API response as a string
                     String jsonResponse = response.body().string();
+                    System.out.println("API Response: " + jsonResponse); // Debug log of the response
+
+                    // Parse the response into a JsonObject
                     JsonObject json = new Gson().fromJson(jsonResponse, JsonObject.class);
 
                     // Check if the server is online
                     boolean online = json.get("online").getAsBoolean();
                     if (!online) {
+                        System.out.println("Server is offline according to API."); // Debug
                         event.reply("The server is currently offline.").queue();
                         return;
                     }
 
-                    // Fetch player count and other details
-                    int onlinePlayers = json.getAsJsonObject("players").get("online").getAsInt();
-                    int maxPlayers = json.getAsJsonObject("players").get("max").getAsInt();
-                    String serverVersion = json.get("version").getAsString();
+                    // Fetch player count and other details from the response
+                    JsonObject playersJson = json.getAsJsonObject("players");
+                    int onlinePlayers = playersJson.has("online") ? playersJson.get("online").getAsInt() : 0;
+                    int maxPlayers = playersJson.has("max") ? playersJson.get("max").getAsInt() : 0;
 
-                    // Create an embedded message for the status
+                    // Fetch server version
+                    String serverVersion = json.has("version") ? json.get("version").getAsString() : "Unknown";
+                    String software = json.has("software") ? json.get("software").getAsString() : "Unknown";
+
+
+                    // Create and send an embedded message with the server status
                     EmbedBuilder embed = new EmbedBuilder()
                             .setTitle("Minecraft Server Status")
                             .setColor(Color.GREEN)
-                            .addField("Server IP", serverIp, true)
+                            .addField("Server IP", "balancedguild.com", true) //Change ip here too
                             .addField("Version", serverVersion, true)
                             .addField("Online Players", onlinePlayers + "/" + maxPlayers, false)
+                            .addField("Software", software, true)
                             .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl());
 
                     event.replyEmbeds(embed.build()).queue();
+
                 } catch (IOException e) {
+                    // Handle any errors that occur during the API request
                     e.printStackTrace();
                     event.reply("An error occurred while retrieving server status.").queue();
                 }
