@@ -2,17 +2,17 @@ package etc.soap.paperDiscord;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.commands.Command;
+import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import okhttp3.OkHttpClient;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.util.List;
 
 public class PaperDiscord extends JavaPlugin {
-    private DiscordCommandListener discordCommandListener;
+    private JDA jda; // JDA instance for the bot
     private final OkHttpClient httpClient = new OkHttpClient(); // HTTP client for server status
 
     @Override
@@ -30,8 +30,7 @@ public class PaperDiscord extends JavaPlugin {
         saveDefaultConfig();
 
         // Initialize and start the Discord bot
-        discordCommandListener = new DiscordCommandListener(this);
-        discordCommandListener.startBot();
+        startBot();
 
         // Clean up old commands
         cleanUpOldCommands();
@@ -46,46 +45,56 @@ public class PaperDiscord extends JavaPlugin {
         System.out.println("Removing Discord Link.");
     }
 
+    private void startBot() {
+        String token = getConfig().getString("discord.token");
+        if (token == null) {
+            getLogger().severe("Discord token not configured.");
+            return;
+        }
+
+        try {
+            jda = JDABuilder.createDefault(token)
+                    .addEventListeners(new ListenerAdapter() {
+                        @Override
+                        public void onReady(ReadyEvent event) {
+                            getLogger().info("Bot is ready.");
+                        }
+                    })
+                    .build();
+            jda.awaitReady(); // Wait for the bot to be fully loaded
+        } catch (Exception e) {
+            getLogger().severe("Failed to initialize Discord bot: " + e.getMessage());
+        }
+    }
+
     private void startStatusUpdater() {
         new BukkitRunnable() {
             @Override
             public void run() {
-                // Ensure we have a valid guild ID and token
+                // Ensure we have a valid guild ID
                 String guildId = getConfig().getString("discord.guild-id");
                 if (guildId == null) {
                     getLogger().warning("Guild ID not configured. Skipping status update.");
                     return;
                 }
 
-                String token = getConfig().getString("discord.token");
-                JDABuilder builder = JDABuilder.createDefault(token);
-
-                builder.addEventListeners(new ListenerAdapter() {
-                    @Override
-                    public void onReady(ReadyEvent event) {
-                        fetchServerStatus((onlinePlayers, maxPlayers) -> {
-                            Guild guild = event.getJDA().getGuildById(guildId);
-                            if (guild != null) {
-                                // Set the bot's status to display max players
-                                if (maxPlayers > 0) {
-                                    event.getJDA().getPresence().setActivity(Activity.watching(onlinePlayers + " Players"));
-                                    event.getJDA().getPresence().setStatus(OnlineStatus.ONLINE);
-                                } else {
-                                    event.getJDA().getPresence().setActivity(Activity.watching("the server"));
-                                    event.getJDA().getPresence().setStatus(OnlineStatus.DO_NOT_DISTURB);
-                                }
-                            } else {
-                                getLogger().severe("Guild not found.");
-                            }
-                        });
+                fetchServerStatus((onlinePlayers, maxPlayers) -> {
+                    Guild guild = jda.getGuildById(guildId);
+                    if (guild != null) {
+                        // Set the bot's status to display online players
+                        if (maxPlayers > 0) {
+                            jda.getPresence().setActivity(Activity.watching(onlinePlayers + " Players"));
+                            jda.getPresence().setStatus(OnlineStatus.ONLINE);
+                        } else {
+                            jda.getPresence().setActivity(Activity.watching("the server"));
+                            jda.getPresence().setStatus(OnlineStatus.DO_NOT_DISTURB);
+                        }
+                    } else {
+                        getLogger().severe("Guild not found.");
                     }
-                }).build();
+                });
             }
         }.runTaskTimer(this, 0L, 600L); // 600 ticks = 30 seconds
-    }
-
-    public void setRPC(SlashCommandInteractionEvent event) {
-        // Implement if needed
     }
 
     private void cleanUpOldCommands() {
@@ -95,41 +104,28 @@ public class PaperDiscord extends JavaPlugin {
             return;
         }
 
-        String token = getConfig().getString("discord.token");
-        JDABuilder builder = JDABuilder.createDefault(token);
-        builder.addEventListeners(new ListenerAdapter() {
+        // Fetch all existing commands and remove unwanted ones
+        jda.addEventListener(new ListenerAdapter() {
             @Override
             public void onReady(ReadyEvent event) {
-                fetchServerStatus((onlinePlayers, maxPlayers) -> {
-                    Guild guild = event.getJDA().getGuildById(guildId);
-                    if (guild != null) {
-                        // Fetch all existing commands
-                        guild.retrieveCommands().queue(existingCommands -> {
-                            // Set the bot's status to display max players
-                            if (maxPlayers > 0) {
-                                event.getJDA().getPresence().setActivity(Activity.watching(onlinePlayers + " Players"));
-                                event.getJDA().getPresence().setStatus(OnlineStatus.ONLINE);
-                            } else {
-                                event.getJDA().getPresence().setActivity(Activity.watching("the server"));
-                                event.getJDA().getPresence().setStatus(OnlineStatus.DO_NOT_DISTURB);
-                            }
+                Guild guild = jda.getGuildById(guildId);
+                if (guild != null) {
+                    guild.retrieveCommands().queue(existingCommands -> {
+                        // Define the commands you want to keep
+                        List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus");
 
-                            // Define the commands you want to keep
-                            List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus");
-
-                            // Remove commands not in the list
-                            for (Command command : existingCommands) {
-                                if (!commandsToKeep.contains(command.getName())) {
-                                    guild.deleteCommandById(command.getId()).queue();
-                                }
+                        // Remove commands not in the list
+                        for (Command command : existingCommands) {
+                            if (!commandsToKeep.contains(command.getName())) {
+                                guild.deleteCommandById(command.getId()).queue();
                             }
-                        });
-                    } else {
-                        getLogger().severe("Guild not found.");
-                    }
-                });
+                        }
+                    });
+                } else {
+                    getLogger().severe("Guild not found.");
+                }
             }
-        }).build();
+        });
     }
 
     private void fetchServerStatus(ServerStatusCallback callback) {
