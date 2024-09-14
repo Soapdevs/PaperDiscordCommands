@@ -1,6 +1,9 @@
     package etc.soap.paperDiscord;
 
+    import net.dv8tion.jda.api.JDA;
     import net.dv8tion.jda.api.JDABuilder;
+    import net.dv8tion.jda.api.OnlineStatus;
+    import net.dv8tion.jda.api.entities.Activity;
     import net.dv8tion.jda.api.entities.Guild;
     import net.dv8tion.jda.api.entities.Member;
     import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -22,7 +25,10 @@
     import java.util.HashMap;
     import java.util.Map;
 
+    import static org.apache.logging.log4j.status.StatusLogger.getLogger;
+
     public class DiscordCommandListener extends ListenerAdapter {
+        private JDA jda; // JDA instance for the bot
 
         private final JavaPlugin plugin;
         private final Map<String, Boolean> usedBoostPerksMap = new HashMap<>();
@@ -39,39 +45,46 @@
         public void startBot() {
             String token = plugin.getConfig().getString("discord.token");
 
-            JDABuilder builder = JDABuilder.createDefault(token);
-            builder.addEventListeners(this);
+            try {
+                JDABuilder builder = JDABuilder.createDefault(token)
+                        .setActivity(Activity.watching("Balanced Guild"))
+                        .setStatus(OnlineStatus.ONLINE)
+                        .addEventListeners(this); // Add this class as an event listener
 
-            builder.build().addEventListener(new ListenerAdapter() {
-                @Override
-                public void onReady(ReadyEvent event) {
-                    System.out.printf("Logged in as %s#%s%n", event.getJDA().getSelfUser().getName(), event.getJDA().getSelfUser().getDiscriminator());
+                // Build and initialize JDA
+                jda = builder.build();
 
-                    // Register slash commands
-                    Guild guild = event.getJDA().getGuildById(plugin.getConfig().getString("discord.guild-id"));
-                    if (guild != null) {
-                        guild.updateCommands().addCommands(
-                                Commands.slash("boostperks", "Give perks to a Minecraft player.")
-                                        .addOption(OptionType.STRING, "name", "The Minecraft player to receive the perks."),
-                                Commands.slash("balancedperks", "Give balanced perks to a Minecraft player.")
-                                        .addOption(OptionType.STRING, "name", "The Minecraft player to receive the balanced perks."),
-                                Commands.slash("steadyperks", "Give steady perks to a Minecraft player.")
-                                        .addOption(OptionType.STRING, "name", "The Minecraft player to receive the steady perks."),
-                                Commands.slash("reload", "Reloads the bot's configuration."),
-                                Commands.slash("resetperk", "Reset perks for a player.")
-                                        .addOption(OptionType.STRING, "perk", "The type of perk to reset (booster/balanced/steady).")
-                                        .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
-                                Commands.slash("serverstatus", "Check the Minecraft server status.") // Add the server status command
+                // Wait for the bot to be fully loaded before proceeding
+                jda.awaitReady();
 
-                        ).queue();
-                    } else {
-                        System.err.println("Guild not found.");
-                    }
+                // Log bot login information
+                System.out.printf("Logged in as %s#%s%n", jda.getSelfUser().getName(), jda.getSelfUser().getDiscriminator());
+
+                // Register slash commands after the bot is ready
+                Guild guild = jda.getGuildById(plugin.getConfig().getString("discord.guild-id"));
+                if (guild != null) {
+                    guild.updateCommands().addCommands(
+                            Commands.slash("boostperks", "Give perks to a Minecraft player.")
+                                    .addOption(OptionType.STRING, "name", "The Minecraft player to receive the perks."),
+                            Commands.slash("balancedperks", "Give balanced perks to a Minecraft player.")
+                                    .addOption(OptionType.STRING, "name", "The Minecraft player to receive the balanced perks."),
+                            Commands.slash("steadyperks", "Give steady perks to a Minecraft player.")
+                                    .addOption(OptionType.STRING, "name", "The Minecraft player to receive the steady perks."),
+                            Commands.slash("reload", "Reloads the bot's configuration."),
+                            Commands.slash("resetperk", "Reset perks for a player.")
+                                    .addOption(OptionType.STRING, "perk", "The type of perk to reset (booster/balanced/steady).")
+                                    .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
+                            Commands.slash("serverstatus", "Check the Minecraft server status.") // Add the server status command
+                    ).queue();
+                } else {
+                    System.err.println("Guild not found.");
                 }
-            });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.out.println("Failed to initialize JDA: " + e.getMessage());
+            }
         }
-
-
 
         public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
             switch (event.getName()) {

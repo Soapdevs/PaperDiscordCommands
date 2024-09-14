@@ -7,63 +7,45 @@ import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.events.session.ReadyEvent;
-import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import org.bukkit.plugin.java.JavaPlugin;
 import net.dv8tion.jda.api.interactions.commands.Command;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.bukkit.Bukkit;
-import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.IOException;
 import java.util.List;
 
 public class PaperDiscord extends JavaPlugin {
+    private DiscordCommandListener discordCommandListener;
     private JDA jda; // JDA instance for the bot
     private final OkHttpClient httpClient = new OkHttpClient(); // HTTP client for server status
 
-    @Override
+@Override
     public void onEnable() {
         // Load the configuration file
         saveDefaultConfig();
 
         // Initialize and start the Discord bot
-        startBot();
+        discordCommandListener = new DiscordCommandListener(this);
+        discordCommandListener.startBot(); // Assign JDA instance
 
-        // Clean up old commands
-        cleanUpOldCommands();
-
-        // Schedule the status updates every 30 seconds
-        startStatusUpdater();
+        // Ensure JDA is initialized before starting the status updater
+        if (jda != null) {
+            cleanUpOldCommands();
+            startStatusUpdater();
+        } else {
+            getLogger().severe("Failed to initialize JDA. Status updater will not start.");
+        }
     }
 
     @Override
     public void onDisable() {
-        cleanUpOldCommands();
         System.out.println("Removing Discord Link.");
-    }
-
-    private void startBot() {
-        String token = getConfig().getString("discord.token");
-        if (token == null) {
-            getLogger().severe("Discord token not configured.");
-            return;
-        }
-
-        try {
-            jda = JDABuilder.createDefault(token)
-                    .addEventListeners(new ListenerAdapter() {
-                        @Override
-                        public void onReady(ReadyEvent event) {
-                            getLogger().info("Bot is ready.");
-                        }
-                    })
-                    .build();
-            jda.awaitReady(); // Wait for the bot to be fully loaded
-        } catch (Exception e) {
-            getLogger().severe("Failed to initialize Discord bot: " + e.getMessage());
+        if (jda != null) {
+            jda.shutdown();
         }
     }
 
@@ -79,6 +61,11 @@ public class PaperDiscord extends JavaPlugin {
                 }
 
                 fetchServerStatus((onlinePlayers, maxPlayers) -> {
+                    if (jda == null) {
+                        getLogger().warning("JDA is not initialized yet. Skipping status update.");
+                        return;
+                    }
+
                     Guild guild = jda.getGuildById(guildId);
                     if (guild != null) {
                         // Set the bot's status to display online players
@@ -98,6 +85,11 @@ public class PaperDiscord extends JavaPlugin {
     }
 
     private void cleanUpOldCommands() {
+        if (jda == null) {
+            getLogger().severe("JDA is not initialized. Cannot clean up old commands.");
+            return;
+        }
+
         String guildId = getConfig().getString("discord.guild-id");
         if (guildId == null) {
             getLogger().warning("Guild ID not configured. Skipping old command cleanup.");
@@ -105,27 +97,22 @@ public class PaperDiscord extends JavaPlugin {
         }
 
         // Fetch all existing commands and remove unwanted ones
-        jda.addEventListener(new ListenerAdapter() {
-            @Override
-            public void onReady(ReadyEvent event) {
-                Guild guild = jda.getGuildById(guildId);
-                if (guild != null) {
-                    guild.retrieveCommands().queue(existingCommands -> {
-                        // Define the commands you want to keep
-                        List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus");
+        Guild guild = jda.getGuildById(guildId);
+        if (guild != null) {
+            guild.retrieveCommands().queue(existingCommands -> {
+                // Define the commands you want to keep
+                List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus");
 
-                        // Remove commands not in the list
-                        for (Command command : existingCommands) {
-                            if (!commandsToKeep.contains(command.getName())) {
-                                guild.deleteCommandById(command.getId()).queue();
-                            }
-                        }
-                    });
-                } else {
-                    getLogger().severe("Guild not found.");
+                // Remove commands not in the list
+                for (Command command : existingCommands) {
+                    if (!commandsToKeep.contains(command.getName())) {
+                        guild.deleteCommandById(command.getId()).queue();
+                    }
                 }
-            }
-        });
+            });
+        } else {
+            getLogger().severe("Guild not found.");
+        }
     }
 
     private void fetchServerStatus(ServerStatusCallback callback) {
