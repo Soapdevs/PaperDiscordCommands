@@ -74,8 +74,9 @@
                             Commands.slash("resetperk", "Reset perks for a player.")
                                     .addOption(OptionType.STRING, "perk", "The type of perk to reset (booster/balanced/steady).")
                                     .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
-                            Commands.slash("serverstatus", "Check the Minecraft server status.") // Add the server status command
-                    ).queue();
+                            Commands.slash("serverstatus", "Check the status of a Minecraft server")
+                                    .addOption(OptionType.STRING, "server_ip", "The IP of the server you want to check", false) // Optional parameter
+                    ).queue(); // Queue commands
                 } else {
                     System.err.println("Guild not found.");
                 }
@@ -113,7 +114,12 @@
         }
 
         private void handleServerStatusCommand(SlashCommandInteractionEvent event) {
-            String apiUrl = "https://api.mcsrvstat.us/2/balancedguild.com"; // change ip here if you need to...
+            // Get the server IP from the slash command's optional argument
+            String serverIp = event.getOption("server_ip") != null
+                    ? event.getOption("server_ip").getAsString()
+                    : "balancedguild.com"; // Default to balancedguild.com if no IP is provided
+
+            String apiUrl = "https://api.mcsrvstat.us/2/" + serverIp;
 
             // Make an asynchronous request to get server status
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -125,7 +131,7 @@
                     // Check if the API response was successful
                     if (!response.isSuccessful()) {
                         System.out.println("API request failed with status code: " + response.code()); // Debug
-                        event.reply("Failed to retrieve server status.").queue();
+                        event.reply("Failed to retrieve server status for " + serverIp + ".").queue();
                         return;
                     }
 
@@ -140,7 +146,7 @@
                     boolean online = json.get("online").getAsBoolean();
                     if (!online) {
                         System.out.println("Server is offline according to API."); // Debug
-                        event.reply("The server is currently offline.").queue();
+                        event.reply("The server " + serverIp + " is currently offline.").queue();
                         return;
                     }
 
@@ -153,12 +159,11 @@
                     String serverVersion = json.has("version") ? json.get("version").getAsString() : "Unknown";
                     String software = json.has("software") ? json.get("software").getAsString() : "Unknown";
 
-
                     // Create and send an embedded message with the server status
                     EmbedBuilder embed = new EmbedBuilder()
                             .setTitle("Minecraft Server Status")
                             .setColor(Color.GREEN)
-                            .addField("Server IP", "balancedguild.com", true) //Change ip here too
+                            .addField("Server IP", serverIp, true) // Dynamic IP field
                             .addField("Version", serverVersion, true)
                             .addField("Online Players", onlinePlayers + "/" + maxPlayers, false)
                             .addField("Software", software, true)
@@ -169,12 +174,10 @@
                 } catch (IOException e) {
                     // Handle any errors that occur during the API request
                     e.printStackTrace();
-                    event.reply("An error occurred while retrieving server status.").queue();
+                    event.reply("An error occurred while retrieving server status for " + serverIp + ".").queue();
                 }
             });
         }
-
-
 
         private void handleResetPerkCommand(SlashCommandInteractionEvent event) {
             // Retrieve the admin role ID from the config
