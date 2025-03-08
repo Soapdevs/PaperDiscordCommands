@@ -1,43 +1,21 @@
 # Discord Bot Configuration
 discord:
-  # Owner ID HERE
   ownerID: "654646115072737303"
-
-  # Anything
   status: "Your Custom Status Here"
-
-  # The bot token provided by Discord
   token: "YOUR_DISCORD_BOT_TOKEN"
-
-  # The ID of the guild (server) where commands will be registered
   guild-id: "YOUR_GUILD_ID"
-
-  # Boost Perks Command Configuration
   boostperks:
-    # The role ID required to use the /boostperks command
     allowedRole: "YOUR_REQUIRED_ROLE_ID"
-    
-    # The Minecraft command to execute
     minecraftCommand: "give {name} minecraft:diamond 1"
-
-  # Balanced Perks Command Configuration
   balancedperks:
-    # The role ID required to use the /balancedperks command
     allowedRole: "YOUR_REQUIRED_ROLE_ID"
-
-    # The Minecraft command to execute
     minecraftCommand: "give {name} minecraft:diamond 1"
-
-  # Steady Perks Command Configuration
   steadyperks:
-    # The role ID required to use the /steadyperks command
     allowedRole: "YOUR_REQUIRED_ROLE_ID"
-
-    # The Minecraft command to execute
     minecraftCommand: "give {name} minecraft:diamond 1"
 
-# Server status configuration default server used by /serverstatus
+# Server status configuration default server used by /serverstatus and /serverstatusembed
 server-status:
-  ip: "your.server.ip"  # Minecraft server IP
-  port: 25565  # Minecraft server port (default is 25565)
-  timeout-seconds: 5  # Timeout duration for the server status request
+  ip: "your.server.ip"
+  port: 25565
+  timeout-seconds: 5
