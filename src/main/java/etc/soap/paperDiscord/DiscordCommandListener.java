@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -13,7 +14,9 @@ import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+
 import java.awt.*;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -60,13 +63,11 @@ public class DiscordCommandListener extends ListenerAdapter {
                                 .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
                         Commands.slash("serverstatus", "Check the status of a Minecraft server")
                                 .addOption(OptionType.STRING, "server_ip", "The IP of the server you want to check", false),
-                        // New command to post an embed that updates periodically
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
                 ).queue();
             } else {
                 System.err.println("Guild not found.");
             }
-
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Failed to initialize JDA: " + e.getMessage());
@@ -103,11 +104,7 @@ public class DiscordCommandListener extends ListenerAdapter {
         }
     }
 
-    // --------------------------
-    // Implementation of commands
-    // --------------------------
-
-    // /resetperk command implementation
+    //region Reset perk commands
     private void handleResetPerkCommand(SlashCommandInteractionEvent event) {
         String discordRoleId = plugin.getConfig().getString("discord.adminRole");
         if (discordRoleId == null || discordRoleId.isEmpty()) {
@@ -179,8 +176,9 @@ public class DiscordCommandListener extends ListenerAdapter {
             event.reply("User has not used steady perks yet.").setEphemeral(true).queue();
         }
     }
+    //endregion
 
-    // /boostperks command implementation
+    //region Boost/Balanced/Steady perks
     private void handleBoostPerksCommand(SlashCommandInteractionEvent event) {
         String discordRoleId = plugin.getConfig().getString("discord.boostperks.allowedRole");
         String minecraftCommand = plugin.getConfig().getString("discord.boostperks.minecraftCommand");
@@ -204,7 +202,6 @@ public class DiscordCommandListener extends ListenerAdapter {
         event.reply("Successfully executed the perks for player **" + playerName + "**!").queue();
     }
 
-    // /balancedperks command implementation
     private void handleBalancedPerksCommand(SlashCommandInteractionEvent event) {
         String discordRoleId = plugin.getConfig().getString("discord.balancedperks.allowedRole");
         String minecraftCommand = plugin.getConfig().getString("discord.balancedperks.minecraftCommand");
@@ -237,7 +234,6 @@ public class DiscordCommandListener extends ListenerAdapter {
         event.reply("Successfully executed the perks for player **" + playerName + "**!").queue();
     }
 
-    // /steadyperks command implementation
     private void handleSteadyPerksCommand(SlashCommandInteractionEvent event) {
         String discordRoleId = plugin.getConfig().getString("discord.steadyperks.allowedRole");
         String minecraftCommand = plugin.getConfig().getString("discord.steadyperks.minecraftCommand");
@@ -269,8 +265,9 @@ public class DiscordCommandListener extends ListenerAdapter {
         usedSteadyPerksMap.put(userId, true);
         event.reply("Successfully executed the perks for player **" + playerName + "**!").queue();
     }
+    //endregion
 
-    // /reload command implementation
+    //region Reload
     private void handleReloadCommand(SlashCommandInteractionEvent event) {
         String discordOwnerId = plugin.getConfig().getString("discord.ownerID");
         boolean isOwner = event.getUser().getId().equals(discordOwnerId);
@@ -281,66 +278,106 @@ public class DiscordCommandListener extends ListenerAdapter {
         plugin.reloadConfig();
         event.reply("Configuration reloaded successfully!").queue();
     }
+    //endregion
 
-    // /serverstatus command implementation (sends an ephemeral reply)
+    //region Server Status
+    // /serverstatus: sends an embed + a separate "Last Updated" message
     private void handleServerStatusCommand(SlashCommandInteractionEvent event) {
         String serverIp = event.getOption("server_ip") != null
                 ? event.getOption("server_ip").getAsString()
                 : plugin.getConfig().getString("server-status.ip");
+
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             ServerStatus status = ServerStatusFetcher.fetchStatus(serverIp);
-            if (!status.isOnline()) {
-                event.reply("The server " + serverIp + " is currently offline.").queue();
-                return;
-            }
+
+            // Build the embed (no "Last Updated" in the embed)
+            String iconUrl = "https://eu.mc-api.net/v3/server/favicon/" + serverIp;
             EmbedBuilder embed = new EmbedBuilder()
                     .setTitle("Minecraft Server Status")
-                    .setColor(Color.GREEN)
-                    .addField("Server IP", serverIp, true)
-                    .addField("Version", status.getVersion(), true)
-                    .addField("Online Players", status.getOnlinePlayers() + "/" + status.getMaxPlayers(), false)
-                    .addField("Software", status.getSoftware(), true)
-                    .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl());
+                    .setThumbnail(iconUrl)
+                    .setColor(status.isOnline() ? Color.GREEN : Color.RED)
+                    .addField("Server IP", serverIp, true);
+
+            if (status.isOnline()) {
+                embed.addField("Version", status.getVersion(), true)
+                        .addField("Players", status.getOnlinePlayers() + "/" + status.getMaxPlayers(), false)
+                        .addField("Software", status.getSoftware(), true);
+            } else {
+                embed.addField("Status", "Offline", true);
+            }
+
+            // 1) Send the embed
             event.replyEmbeds(embed.build()).queue();
+
+            // 2) Send a separate "Last Updated" message using a user-local Discord timestamp
+            //    For a user-local time, we can do e.g. <t:epochSeconds:f> or <t:epochSeconds:R>
+            long epochSeconds = Instant.now().getEpochSecond();
+            String userLocalTime = "Last Updated: <t:" + epochSeconds + ":R>";
+            // This message is posted publicly (not ephemeral)
+            event.getChannel().sendMessage(userLocalTime).queue();
         });
     }
 
-    // /serverstatusembed command implementation
+    // /serverstatusembed: auto-updating embed + a separate "Last Updated" message
     private void handleServerStatusEmbedCommand(SlashCommandInteractionEvent event) {
         String serverIp = plugin.getConfig().getString("server-status.ip");
         TextChannel channel = event.getChannel().asTextChannel();
 
+        // Fetch initial data
         ServerStatus initialStatus = ServerStatusFetcher.fetchStatus(serverIp);
         EmbedBuilder embed = buildServerStatusEmbed(initialStatus, serverIp);
-        channel.sendMessageEmbeds(embed.build()).queue(message -> {
-            event.reply("Server status embed started in " + channel.getAsMention()).setEphemeral(true).queue();
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    ServerStatus updatedStatus = ServerStatusFetcher.fetchStatus(serverIp);
-                    EmbedBuilder updatedEmbed = buildServerStatusEmbed(updatedStatus, serverIp);
-                    message.editMessageEmbeds(updatedEmbed.build()).queue();
-                }
-            }.runTaskTimer(plugin, 30 * 20L, 30 * 20L);
+
+        // We'll store references to both the embed message and the timestamp message
+        Message[] messages = new Message[2];
+
+        // 1) Send the embed
+        channel.sendMessageEmbeds(embed.build()).queue(embedMsg -> {
+            // 2) Send separate "Last Updated" with user-local Discord timestamp
+            long epochSeconds = Instant.now().getEpochSecond();
+            String initialTimestamp = "Last Updated: <t:" + epochSeconds + ":R>";
+
+            channel.sendMessage(initialTimestamp).queue(timestampMsg -> {
+                messages[0] = embedMsg;    // embed message
+                messages[1] = timestampMsg; // last updated message
+
+                // Confirm to user that we posted the embed
+                event.reply("Server status embed started in " + channel.getAsMention()).setEphemeral(true).queue();
+
+                // Schedule auto-updates every 30 seconds
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        ServerStatus updatedStatus = ServerStatusFetcher.fetchStatus(serverIp);
+                        EmbedBuilder updatedEmbed = buildServerStatusEmbed(updatedStatus, serverIp);
+
+                        // Update the embed
+                        messages[0].editMessageEmbeds(updatedEmbed.build()).queue();
+
+                        // Update the "Last Updated" message with a new user-local timestamp
+                        long newEpoch = Instant.now().getEpochSecond();
+                        String newTimestamp = "Last Updated: <t:" + newEpoch + ":R>";
+                        messages[1].editMessage(newTimestamp).queue();
+                    }
+                }.runTaskTimer(plugin, 30 * 20L, 30 * 20L);
+            });
         });
     }
 
-    private EmbedBuilder buildServerStatusEmbed(ServerStatus status, String serverIp) {
-        EmbedBuilder embed = new EmbedBuilder();
-        if (!status.isOnline()) {
-            embed.setTitle("Minecraft Server Status")
-                    .setColor(Color.RED)
-                    .addField("Server IP", serverIp, true)
-                    .addField("Status", "Offline", true)
-                    .setFooter("Status update", null);
-        } else {
-            embed.setTitle("Minecraft Server Status")
-                    .setColor(Color.GREEN)
-                    .addField("Server IP", serverIp, true)
-                    .addField("Version", status.getVersion(), true)
+    // Helper method to build an embed without "Last Updated"
+    public EmbedBuilder buildServerStatusEmbed(ServerStatus status, String serverIp) {
+        String iconUrl = "https://eu.mc-api.net/v3/server/favicon/" + serverIp;
+        EmbedBuilder embed = new EmbedBuilder()
+                .setTitle("Minecraft Server Status")
+                .setThumbnail(iconUrl)
+                .setColor(status.isOnline() ? Color.GREEN : Color.RED)
+                .addField("Server IP", serverIp, true);
+
+        if (status.isOnline()) {
+            embed.addField("Version", status.getVersion(), true)
                     .addField("Players", status.getOnlinePlayers() + "/" + status.getMaxPlayers(), false)
-                    .addField("Software", status.getSoftware(), true)
-                    .setFooter("Status update", null);
+                    .addField("Software", status.getSoftware(), true);
+        } else {
+            embed.addField("Status", "Offline", true);
         }
         return embed;
     }

@@ -18,7 +18,7 @@ public class ServerStatusFetcher {
 
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful() || response.body() == null) {
-                return new ServerStatus(false, 0, 0, "Unknown", "Unknown");
+                return new ServerStatus(false, 0, 0, "Unknown", "Unknown", null);
             }
 
             String jsonResponse = response.body().string();
@@ -26,7 +26,7 @@ public class ServerStatusFetcher {
 
             boolean online = json.has("online") && json.get("online").getAsBoolean();
             if (!online) {
-                return new ServerStatus(false, 0, 0, "Unknown", "Unknown");
+                return new ServerStatus(false, 0, 0, "Unknown", "Unknown", null);
             }
 
             int onlinePlayers = 0;
@@ -38,11 +38,12 @@ public class ServerStatusFetcher {
             }
             String version = json.has("version") ? json.get("version").getAsString() : "Unknown";
             String software = json.has("software") ? json.get("software").getAsString() : "Unknown";
+            String icon = json.has("icon") ? json.get("icon").getAsString() : null;
 
-            return new ServerStatus(true, onlinePlayers, maxPlayers, version, software);
+            return new ServerStatus(true, onlinePlayers, maxPlayers, version, software, icon);
         } catch (IOException e) {
             e.printStackTrace();
-            return new ServerStatus(false, 0, 0, "Unknown", "Unknown");
+            return new ServerStatus(false, 0, 0, "Unknown", "Unknown", null);
         }
     }
 }

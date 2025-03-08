@@ -1,9 +1,10 @@
 package etc.soap.paperDiscord;
 
+import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
-import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.entities.Guild;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.Bukkit;
@@ -19,7 +20,7 @@ public class PaperDiscord extends JavaPlugin {
         discordCommandListener = new DiscordCommandListener(this);
         discordCommandListener.startBot();
 
-        // Delay to allow JDA to initialize before starting the updater
+        // Delay to allow JDA to initialize before starting updaters
         Bukkit.getScheduler().runTaskLater(this, () -> {
             if (jda == null) {
                 jda = discordCommandListener.getJDA();
@@ -27,6 +28,10 @@ public class PaperDiscord extends JavaPlugin {
             if (jda != null) {
                 cleanUpOldCommands();
                 startStatusUpdater();
+                // Auto-start the server status embed if enabled in config
+                if (getConfig().getBoolean("server-status.auto-embed", false)) {
+                    startAutoServerStatusEmbedUpdater();
+                }
             } else {
                 getLogger().severe("Failed to initialize JDA. Status updater will not start.");
             }
@@ -93,6 +98,36 @@ public class PaperDiscord extends JavaPlugin {
                     getLogger().severe("Guild not found.");
                 }
             }
-        }.runTaskTimer(this, 0L, 600L); // 600L = 30 seconds (20 ticks = 1 second)
+        }.runTaskTimer(this, 0L, 600L);
+    }
+
+    // This method auto-posts a server status embed and updates it every 30 seconds.
+    private void startAutoServerStatusEmbedUpdater() {
+        String channelId = getConfig().getString("server-status.channel-id");
+        if (channelId == null || channelId.isEmpty()) {
+            getLogger().warning("No channel id configured for auto server status embed update.");
+            return;
+        }
+        var channel = jda.getTextChannelById(channelId);
+        if (channel == null) {
+            getLogger().warning("Auto server status embed channel not found.");
+            return;
+        }
+        String serverIp = getConfig().getString("server-status.ip");
+        ServerStatus initialStatus = ServerStatusFetcher.fetchStatus(serverIp);
+        // Use the same embed builder as in the command
+        DiscordCommandListener tempListener = new DiscordCommandListener(this);
+        EmbedBuilder embed = tempListener.buildServerStatusEmbed(initialStatus, serverIp);
+        channel.sendMessageEmbeds(embed.build()).queue(message -> {
+            getLogger().info("Auto server status embed posted. Message ID: " + message.getId());
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    ServerStatus updatedStatus = ServerStatusFetcher.fetchStatus(serverIp);
+                    EmbedBuilder updatedEmbed = tempListener.buildServerStatusEmbed(updatedStatus, serverIp);
+                    message.editMessageEmbeds(updatedEmbed.build()).queue();
+                }
+            }.runTaskTimer(PaperDiscord.this, 30 * 20L, 30 * 20L);
+        });
     }
 }

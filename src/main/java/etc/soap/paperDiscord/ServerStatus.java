@@ -6,13 +6,15 @@ public class ServerStatus {
     private final int maxPlayers;
     private final String version;
     private final String software;
+    private final String icon; // Server icon (data URI) fetched from the API
 
-    public ServerStatus(boolean online, int onlinePlayers, int maxPlayers, String version, String software) {
+    public ServerStatus(boolean online, int onlinePlayers, int maxPlayers, String version, String software, String icon) {
         this.online = online;
         this.onlinePlayers = onlinePlayers;
         this.maxPlayers = maxPlayers;
         this.version = version;
         this.software = software;
+        this.icon = icon;
     }
 
     public boolean isOnline() {
@@ -33,5 +35,9 @@ public class ServerStatus {
 
     public String getSoftware() {
         return software;
+    }
+
+    public String getIcon() {
+        return icon;
     }
 }

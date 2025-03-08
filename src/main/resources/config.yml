@@ -14,8 +14,10 @@ discord:
     allowedRole: "YOUR_REQUIRED_ROLE_ID"
     minecraftCommand: "give {name} minecraft:diamond 1"
 
-# Server status configuration default server used by /serverstatus and /serverstatusembed
+# Server status configuration (used by /serverstatus and /serverstatusembed)
 server-status:
   ip: "your.server.ip"
   port: 25565
   timeout-seconds: 5
+  auto-embed: true            # When true, auto-posts and updates embed on startup.
+  channel-id: "DISCORD_CHANNEL_ID"  # The text channel ID where the auto-embed should be posted.
