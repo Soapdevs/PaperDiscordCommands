@@ -320,6 +320,14 @@ public class DiscordCommandListener extends ListenerAdapter {
 
     // /serverstatusembed: auto-updating embed + a separate "Last Updated" message
     private void handleServerStatusEmbedCommand(SlashCommandInteractionEvent event) {
+
+        String discordOwnerId = plugin.getConfig().getString("discord.ownerID");
+        boolean isOwner = event.getUser().getId().equals(discordOwnerId);
+
+        if (!isOwner) {
+            event.reply("You don't have permission to use this command.").setEphemeral(true).queue();
+            return;
+        }
         String serverIp = plugin.getConfig().getString("server-status.ip");
         TextChannel channel = event.getChannel().asTextChannel();
 

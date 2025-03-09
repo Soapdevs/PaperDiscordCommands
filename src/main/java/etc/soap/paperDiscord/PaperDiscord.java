@@ -5,6 +5,8 @@ import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Message;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.Bukkit;
@@ -13,6 +15,9 @@ import java.util.List;
 public class PaperDiscord extends JavaPlugin {
     private DiscordCommandListener discordCommandListener;
     private JDA jda;
+    // We'll store references to our auto-posted messages so we can delete them on shutdown
+    private Message embedMessage;
+    private Message lastUpdatedMessage;
 
     @Override
     public void onEnable() {
@@ -62,13 +67,20 @@ public class PaperDiscord extends JavaPlugin {
     @Override
     public void onDisable() {
         getLogger().info("Removing Discord Link.");
+        // Delete auto-posted messages if they exist
+        if (embedMessage != null) {
+            embedMessage.delete().queue();
+        }
+        if (lastUpdatedMessage != null) {
+            lastUpdatedMessage.delete().queue();
+        }
         if (jda != null) {
             jda.shutdown();
         }
     }
 
     private void startStatusUpdater() {
-        new BukkitRunnable() {
+        new org.bukkit.scheduler.BukkitRunnable() {
             @Override
             public void run() {
                 String guildId = getConfig().getString("discord.guild-id");
@@ -101,33 +113,63 @@ public class PaperDiscord extends JavaPlugin {
         }.runTaskTimer(this, 0L, 600L);
     }
 
-    // This method auto-posts a server status embed and updates it every 30 seconds.
+    // Modified auto-embed updater: Deletes old auto-post messages before posting new ones.
     private void startAutoServerStatusEmbedUpdater() {
         String channelId = getConfig().getString("server-status.channel-id");
         if (channelId == null || channelId.isEmpty()) {
             getLogger().warning("No channel id configured for auto server status embed update.");
             return;
         }
-        var channel = jda.getTextChannelById(channelId);
+        TextChannel channel = jda.getTextChannelById(channelId);
         if (channel == null) {
             getLogger().warning("Auto server status embed channel not found.");
             return;
         }
+        // Clear previous auto-embed messages from this bot (if any)
+        channel.getHistory().retrievePast(100).queue(messages -> {
+            for (Message msg : messages) {
+                if (msg.getAuthor().equals(jda.getSelfUser())) {
+                    // Check if this message is our auto-post (by embed title or content)
+                    if (!msg.getEmbeds().isEmpty() && msg.getEmbeds().get(0).getTitle() != null &&
+                            msg.getEmbeds().get(0).getTitle().equals("Minecraft Server Status")) {
+                        msg.delete().queue();
+                    } else if (msg.getContentRaw().startsWith("Last Updated:")) {
+                        msg.delete().queue();
+                    }
+                }
+            }
+            // Now post fresh messages
+            postAutoEmbedMessages(channel);
+        });
+    }
+
+    // Helper to post auto-embed messages and schedule updates
+    private void postAutoEmbedMessages(TextChannel channel) {
         String serverIp = getConfig().getString("server-status.ip");
         ServerStatus initialStatus = ServerStatusFetcher.fetchStatus(serverIp);
-        // Use the same embed builder as in the command
-        DiscordCommandListener tempListener = new DiscordCommandListener(this);
-        EmbedBuilder embed = tempListener.buildServerStatusEmbed(initialStatus, serverIp);
-        channel.sendMessageEmbeds(embed.build()).queue(message -> {
-            getLogger().info("Auto server status embed posted. Message ID: " + message.getId());
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    ServerStatus updatedStatus = ServerStatusFetcher.fetchStatus(serverIp);
-                    EmbedBuilder updatedEmbed = tempListener.buildServerStatusEmbed(updatedStatus, serverIp);
-                    message.editMessageEmbeds(updatedEmbed.build()).queue();
-                }
-            }.runTaskTimer(PaperDiscord.this, 30 * 20L, 30 * 20L);
+        // Use the existing helper method in DiscordCommandListener to build the embed
+        EmbedBuilder embed = discordCommandListener.buildServerStatusEmbed(initialStatus, serverIp);
+        channel.sendMessageEmbeds(embed.build()).queue(embedMsg -> {
+            getLogger().info("Auto server status embed posted. Message ID: " + embedMsg.getId());
+            // Send separate "Last Updated" message using Discord timestamp formatting
+            long epochSeconds = System.currentTimeMillis() / 1000L;
+            String timestamp = "Last Updated: <t:" + epochSeconds + ":R>";
+            channel.sendMessage(timestamp).queue(timestampMsg -> {
+                embedMessage = embedMsg;
+                lastUpdatedMessage = timestampMsg;
+                // Schedule auto-updates every 30 seconds to update both messages
+                new BukkitRunnable() {
+                    @Override
+                    public void run() {
+                        ServerStatus updatedStatus = ServerStatusFetcher.fetchStatus(serverIp);
+                        EmbedBuilder updatedEmbed = discordCommandListener.buildServerStatusEmbed(updatedStatus, serverIp);
+                        embedMessage.editMessageEmbeds(updatedEmbed.build()).queue();
+                        long newEpoch = System.currentTimeMillis() / 1000L;
+                        String newTimestamp = "Last Updated: <t:" + newEpoch + ":R>";
+                        lastUpdatedMessage.editMessage(newTimestamp).queue();
+                    }
+                }.runTaskTimer(PaperDiscord.this, 30 * 20L, 30 * 20L);
+            });
         });
     }
 }
