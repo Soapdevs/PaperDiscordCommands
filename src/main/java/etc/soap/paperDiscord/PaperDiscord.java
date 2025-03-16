@@ -52,7 +52,7 @@ public class PaperDiscord extends JavaPlugin {
         Guild guild = jda.getGuildById(guildId);
         if (guild != null) {
             guild.retrieveCommands().queue(existingCommands -> {
-                List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus", "serverstatusembed");
+                List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus", "serverstatusembed", "banformat");
                 for (net.dv8tion.jda.api.interactions.commands.Command command : existingCommands) {
                     if (!commandsToKeep.contains(command.getName())) {
                         guild.deleteCommandById(command.getId()).queue();
@@ -112,7 +112,6 @@ public class PaperDiscord extends JavaPlugin {
             }
         }.runTaskTimer(this, 0L, 600L);
     }
-
     // Modified auto-embed updater: Deletes old auto-post messages before posting new ones.
     private void startAutoServerStatusEmbedUpdater() {
         String channelId = getConfig().getString("server-status.channel-id");

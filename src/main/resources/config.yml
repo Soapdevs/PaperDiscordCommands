@@ -2,6 +2,7 @@
 discord:
   ownerID: "654646115072737303"
   status: "Your Custom Status Here"
+  staffRole: "STAFF_ROLE_ID"              # Role ID for staff allowed to use /banformat
   token: "YOUR_DISCORD_BOT_TOKEN"
   guild-id: "YOUR_GUILD_ID"
   boostperks:

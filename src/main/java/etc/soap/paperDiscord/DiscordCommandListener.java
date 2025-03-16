@@ -4,11 +4,22 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
+import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
+import net.dv8tion.jda.api.interactions.modals.Modal;
+import net.dv8tion.jda.api.interactions.components.text.TextInput;
+import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.modals.Modal;
+import net.dv8tion.jda.api.interactions.modals.ModalMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
 import org.bukkit.Bukkit;
@@ -17,6 +28,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.awt.*;
 import java.time.Instant;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -26,6 +38,9 @@ public class DiscordCommandListener extends ListenerAdapter {
     private final Map<String, Boolean> usedBoostPerksMap = new HashMap<>();
     private final Map<String, Boolean> usedBalancedPerksMap = new HashMap<>();
     private final Map<String, Boolean> usedSteadyPerksMap = new HashMap<>();
+
+    private final Map<String, BanAppealData> pendingBanAppeals = new HashMap<>();
+
 
     public DiscordCommandListener(JavaPlugin plugin) {
         this.plugin = plugin;
@@ -63,6 +78,8 @@ public class DiscordCommandListener extends ListenerAdapter {
                                 .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
                         Commands.slash("serverstatus", "Check the status of a Minecraft server")
                                 .addOption(OptionType.STRING, "server_ip", "The IP of the server you want to check", false),
+                        Commands.slash("banformat", "Start the ban appeal process")
+                                .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form"),
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
                 ).queue();
             } else {
@@ -98,11 +115,162 @@ public class DiscordCommandListener extends ListenerAdapter {
             case "serverstatusembed":
                 handleServerStatusEmbedCommand(event);
                 break;
+            case "banformat":
+                handleBanFormatCommand(event);
+                break;
             default:
                 event.reply("Unknown command").setEphemeral(true).queue();
                 break;
         }
     }
+
+
+    // /banformat command: only staff can use; they specify the target user as an option.
+    private void handleBanFormatCommand(SlashCommandInteractionEvent event) {
+        String staffRoleId = plugin.getConfig().getString("discord.staffRole");
+        if (staffRoleId == null || staffRoleId.isEmpty() ||
+                event.getMember().getRoles().stream().noneMatch(role -> role.getId().equals(staffRoleId))) {
+            event.reply("You do not have permission to use this command.").setEphemeral(true).queue();
+            return;
+        }
+        if (event.getOption("user") == null) {
+            event.reply("Please mention a user.").setEphemeral(true).queue();
+            return;
+        }
+        var targetMember = event.getOption("user").getAsMember();
+        if (targetMember == null) {
+            event.reply("Invalid user provided.").setEphemeral(true).queue();
+            return;
+        }
+        // Send an ephemeral reply to the staff confirming that the invitation was sent
+        event.reply("Invitation sent to " + targetMember.getAsMention() + " to fill out their ban appeal form.").setEphemeral(true).queue();
+        // Send a public message in the channel pinging the target user with a button
+        TextChannel channel = event.getChannel().asTextChannel();
+        channel.sendMessage(targetMember.getAsMention() + ", please click the button below to fill out your ban appeal form:")
+                .addActionRow(Button.primary("banAppealButton", "Fill Appeal Form"))
+                .queue();
+    }
+    @Override
+    public void onButtonInteraction(ButtonInteractionEvent event) {
+        if (event.getComponentId().equals("banAppealButton")) {
+            // Open Modal 1 (Questions 1-5) for the target user
+            TextInput usernameInput = TextInput.create("ban_username", "Your Minecraft Username", TextInputStyle.SHORT)
+                    .setPlaceholder("Enter your in-game name")
+                    .setRequired(true)
+                    .build();
+            TextInput banDateInput = TextInput.create("ban_date", "Date of Ban", TextInputStyle.SHORT)
+                    .setPlaceholder("e.g., 2025-03-07")
+                    .setRequired(false)
+                    .build();
+            TextInput serverNameInput = TextInput.create("server_name", "Server Name (if applicable)", TextInputStyle.SHORT)
+                    .setPlaceholder("Enter server/game mode")
+                    .setRequired(false)
+                    .build();
+            TextInput banReasonInput = TextInput.create("ban_reason", "Ban Reason", TextInputStyle.PARAGRAPH)
+                    .setPlaceholder("Reason given when you tried to log in")
+                    .setRequired(true)
+                    .build();
+            TextInput whoBannedInput = TextInput.create("who_banned", "Who Banned You (if known)", TextInputStyle.SHORT)
+                    .setPlaceholder("Admin name or system")
+                    .setRequired(false)
+                    .build();
+
+            Modal modal1 = Modal.create("banAppealModal1", "Ban Appeal Form (Part 1)")
+                    .addActionRow(usernameInput)
+                    .addActionRow(banDateInput)
+                    .addActionRow(serverNameInput)
+                    .addActionRow(banReasonInput)
+                    .addActionRow(whoBannedInput)
+                    .build();
+            event.replyModal(modal1).queue();
+        } else if (event.getComponentId().equals("banAppealContinue")) {
+            // This branch is for a button to continue to Modal 2; if you prefer a two-step process,
+            // you could have Modal 1 followed by an ephemeral message with a "Continue" button.
+            TextInput whyBannedInput = TextInput.create("why_banned", "Why Do You Think You Were Banned?", TextInputStyle.PARAGRAPH)
+                    .setPlaceholder("Explain your perspective")
+                    .setRequired(true)
+                    .build();
+            TextInput admitInput = TextInput.create("admit_rule", "Do You Admit to the Rule Violation? (Yes/No)", TextInputStyle.SHORT)
+                    .setPlaceholder("Yes or No")
+                    .setRequired(true)
+                    .build();
+            TextInput whyUnbanInput = TextInput.create("why_unban", "Why Should You Be Unbanned?", TextInputStyle.PARAGRAPH)
+                    .setPlaceholder("Explain why you deserve another chance")
+                    .setRequired(true)
+                    .build();
+            TextInput bannedBeforeInput = TextInput.create("banned_before", "Have You Been Banned Before? (Yes/No)", TextInputStyle.SHORT)
+                    .setPlaceholder("Yes or No")
+                    .setRequired(false)
+                    .build();
+            TextInput otherCommentsInput = TextInput.create("other_comments", "Any Other Comments?", TextInputStyle.PARAGRAPH)
+                    .setPlaceholder("Additional information")
+                    .setRequired(false)
+                    .build();
+
+            Modal modal2 = Modal.create("banAppealModal2", "Ban Appeal Form (Part 2)")
+                    .addActionRow(whyBannedInput)
+                    .addActionRow(admitInput)
+                    .addActionRow(whyUnbanInput)
+                    .addActionRow(bannedBeforeInput)
+                    .addActionRow(otherCommentsInput)
+                    .build();
+            event.replyModal(modal2).queue();
+        }
+    }
+
+    @Override
+    public void onModalInteraction(ModalInteractionEvent event) {
+        if (event.getModalId().equals("banAppealModal1")) {
+            // Process Modal 1 responses and store them temporarily
+            String username = event.getValue("ban_username").getAsString();
+            String banDate = event.getValue("ban_date") != null ? event.getValue("ban_date").getAsString() : "Unknown";
+            String serverName = event.getValue("server_name") != null ? event.getValue("server_name").getAsString() : "N/A";
+            String banReason = event.getValue("ban_reason").getAsString();
+            String whoBanned = event.getValue("who_banned") != null ? event.getValue("who_banned").getAsString() : "Unknown";
+
+            BanAppealData data = new BanAppealData(username, banDate, serverName, banReason, whoBanned);
+            pendingBanAppeals.put(event.getUser().getId(), data);
+
+            // Instead of calling replyModal here (which is not allowed), reply with a button to open Modal 2
+            event.reply("Modal Part 1 received. Click the button below to continue to Part 2.")
+                    .addActionRow(Button.primary("banAppealContinue", "Continue to Part 2"))
+                    .setEphemeral(true)
+                    .queue();
+        } else if (event.getModalId().equals("banAppealModal2")) {
+            // Process Modal 2 responses
+            String whyBanned = event.getValue("why_banned").getAsString();
+            String admit = event.getValue("admit_rule").getAsString();
+            String whyUnban = event.getValue("why_unban").getAsString();
+            String bannedBefore = event.getValue("banned_before") != null ? event.getValue("banned_before").getAsString() : "No";
+            String otherComments = event.getValue("other_comments") != null ? event.getValue("other_comments").getAsString() : "None";
+
+            // Retrieve stored data from Modal 1
+            String userId = event.getUser().getId();
+            BanAppealData data = pendingBanAppeals.remove(userId);
+            if (data == null) {
+                event.reply("An error occurred retrieving your previous responses.").setEphemeral(true).queue();
+                return;
+            }
+
+            // Build the final embed with all ban appeal info
+            EmbedBuilder embed = new EmbedBuilder()
+                    .setTitle("Ban Appeal Submitted")
+                    .setColor(Color.ORANGE)
+                    .addField("Minecraft Username", data.minecraftUsername, false)
+                    .addField("Date of Ban", data.dateOfBan, false)
+                    .addField("Server Name", data.serverName, false)
+                    .addField("Ban Reason", data.banReason, false)
+                    .addField("Who Banned You", data.whoBanned, false)
+                    .addField("Why Do You Think You Were Banned?", whyBanned, false)
+                    .addField("Do You Admit to the Rule Violation?", admit, false)
+                    .addField("Why Should You Be Unbanned?", whyUnban, false)
+                    .addField("Have You Been Banned Before?", bannedBefore, false)
+                    .addField("Any Other Comments", otherComments, false)
+                    .setFooter("Please wait patiently while your appeal is reviewed.", null);
+            event.replyEmbeds(embed.build()).queue();
+        }
+    }
+    //endregion
 
     //region Reset perk commands
     private void handleResetPerkCommand(SlashCommandInteractionEvent event) {
