@@ -126,6 +126,7 @@ public class DiscordCommandListener extends ListenerAdapter {
 
 
     // /banformat command: only staff can use; they specify the target user as an option.
+    // /banformat command: only staff can use; specify the target user
     private void handleBanFormatCommand(SlashCommandInteractionEvent event) {
         String staffRoleId = plugin.getConfig().getString("discord.staffRole");
         if (staffRoleId == null || staffRoleId.isEmpty() ||
@@ -134,26 +135,40 @@ public class DiscordCommandListener extends ListenerAdapter {
             return;
         }
         if (event.getOption("user") == null) {
-            event.reply("Please mention a user.").setEphemeral(true).queue();
+            event.reply("Please specify a user.").setEphemeral(true).queue();
             return;
         }
         var targetMember = event.getOption("user").getAsMember();
         if (targetMember == null) {
-            event.reply("Invalid user provided.").setEphemeral(true).queue();
+            event.reply("Invalid user specified.").setEphemeral(true).queue();
             return;
         }
-        // Send an ephemeral reply to the staff confirming that the invitation was sent
-        event.reply("Invitation sent to " + targetMember.getAsMention() + " to fill out their ban appeal form.").setEphemeral(true).queue();
-        // Send a public message in the channel pinging the target user with a button
+        // Inform the staff that the invitation was sent
+        event.reply("Invitation sent to " + targetMember.getAsMention() + " to fill out their ban appeal form.")
+                .setEphemeral(true)
+                .queue();
+        // Send a public message in the channel pinging the target user with a button.
+        // The button's custom ID includes the target user's ID so only they can click it.
         TextChannel channel = event.getChannel().asTextChannel();
+        String buttonId = "banAppealButton_" + targetMember.getId();
         channel.sendMessage(targetMember.getAsMention() + ", please click the button below to fill out your ban appeal form:")
-                .addActionRow(Button.primary("banAppealButton", "Fill Appeal Form"))
+                .addActionRow(Button.primary(buttonId, "Fill Appeal Form"))
                 .queue();
     }
+
     @Override
     public void onButtonInteraction(ButtonInteractionEvent event) {
-        if (event.getComponentId().equals("banAppealButton")) {
-            // Open Modal 1 (Questions 1-5) for the target user
+        String compId = event.getComponentId();
+        // Handle the "Fill Appeal Form" button from /banformat
+        if (compId.startsWith("banAppealButton_")) {
+            String targetUserId = compId.substring("banAppealButton_".length());
+            if (!event.getUser().getId().equals(targetUserId)) {
+                event.reply("This button is not for you.").setEphemeral(true).queue();
+                return;
+            }
+            // Disable the button so it can only be used once.
+            event.getMessage().editMessageComponents().queue();
+            // Open Modal 1 (Questions 1-5)
             TextInput usernameInput = TextInput.create("ban_username", "Your Minecraft Username", TextInputStyle.SHORT)
                     .setPlaceholder("Enter your in-game name")
                     .setRequired(true)
@@ -163,7 +178,7 @@ public class DiscordCommandListener extends ListenerAdapter {
                     .setRequired(false)
                     .build();
             TextInput serverNameInput = TextInput.create("server_name", "Server Name (if applicable)", TextInputStyle.SHORT)
-                    .setPlaceholder("Enter server/game mode")
+                    .setPlaceholder("Enter server or game mode")
                     .setRequired(false)
                     .build();
             TextInput banReasonInput = TextInput.create("ban_reason", "Ban Reason", TextInputStyle.PARAGRAPH)
@@ -183,9 +198,15 @@ public class DiscordCommandListener extends ListenerAdapter {
                     .addActionRow(whoBannedInput)
                     .build();
             event.replyModal(modal1).queue();
-        } else if (event.getComponentId().equals("banAppealContinue")) {
-            // This branch is for a button to continue to Modal 2; if you prefer a two-step process,
-            // you could have Modal 1 followed by an ephemeral message with a "Continue" button.
+        }
+        // If there is a separate continuation button for Modal 2, check that too.
+        else if (compId.equals("banAppealContinue")) {
+            // Ensure that the user already submitted Modal 1.
+            if (!pendingBanAppeals.containsKey(event.getUser().getId())) {
+                event.reply("You have not submitted Part 1 of the appeal.").setEphemeral(true).queue();
+                return;
+            }
+            // Open Modal 2 (Questions 6-10)
             TextInput whyBannedInput = TextInput.create("why_banned", "Why Do You Think You Were Banned?", TextInputStyle.PARAGRAPH)
                     .setPlaceholder("Explain your perspective")
                     .setRequired(true)
@@ -231,8 +252,7 @@ public class DiscordCommandListener extends ListenerAdapter {
             BanAppealData data = new BanAppealData(username, banDate, serverName, banReason, whoBanned);
             pendingBanAppeals.put(event.getUser().getId(), data);
 
-            // Instead of calling replyModal here (which is not allowed), reply with a button to open Modal 2
-            event.reply("Modal Part 1 received. Click the button below to continue to Part 2.")
+            event.reply("Part 1 received. Click the button below to continue to Part 2.")
                     .addActionRow(Button.primary("banAppealContinue", "Continue to Part 2"))
                     .setEphemeral(true)
                     .queue();
@@ -252,10 +272,10 @@ public class DiscordCommandListener extends ListenerAdapter {
                 return;
             }
 
-            // Build the final embed with all ban appeal info
+            // Build the final embed with all ban appeal information
             EmbedBuilder embed = new EmbedBuilder()
                     .setTitle("Ban Appeal Submitted")
-                    .setColor(Color.ORANGE)
+                    .setColor(Color.CYAN)
                     .addField("Minecraft Username", data.minecraftUsername, false)
                     .addField("Date of Ban", data.dateOfBan, false)
                     .addField("Server Name", data.serverName, false)
