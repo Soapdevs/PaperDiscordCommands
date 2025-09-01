@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-
 public class DatabaseManager {
     private final HikariDataSource ds;
 
@@ -22,7 +21,10 @@ public class DatabaseManager {
         String pass = plugin.getConfig().getString("mysql.password", "");
         int pool = plugin.getConfig().getInt("mysql.pool-size", 4);
 
-        cfg.setJdbcUrl(String.format("jdbc:mysql://%s:%d/%s?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC", host, port, db));
+        cfg.setJdbcUrl(String.format(
+                "jdbc:mysql://%s:%d/%s?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC",
+                host, port, db
+        ));
         cfg.setUsername(user);
         cfg.setPassword(pass);
         cfg.setMaximumPoolSize(pool);
@@ -182,10 +184,6 @@ public class DatabaseManager {
 
     /**
      * Fetch combined player info and duels statistics for the specified player.
-     *
-     * @param name     the player name to query
-     * @param kitLimit maximum number of per-kit records
-     * @return an Optional containing {@link PlayerStats} if the player exists
      */
     public Optional<PlayerStats> getPlayerStatsByName(String name, int kitLimit) {
         Optional<PlayerInfo> infoOpt = getPlayerInfoByName(name);

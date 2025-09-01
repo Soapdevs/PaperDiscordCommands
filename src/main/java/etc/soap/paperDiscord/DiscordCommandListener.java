@@ -619,8 +619,8 @@ public class DiscordCommandListener extends ListenerAdapter {
                     long seconds = p.playtime;
                     long days = TimeUnit.SECONDS.toDays(seconds);
                     long hours = TimeUnit.SECONDS.toHours(seconds) - TimeUnit.DAYS.toHours(days);
-                    long minutes = TimeUnit.SECONDS.toMinutes(seconds)
-                            - TimeUnit.HOURS.toMinutes(TimeUnit.SECONDS.toHours(seconds));
+
+                    long minutes = TimeUnit.SECONDS.toMinutes(seconds) - TimeUnit.HOURS.toMinutes(TimeUnit.SECONDS.toHours(seconds));
                     String playtimeStr = (days > 0 ? (days + "d ") : "") + hours + "h " + minutes + "m";
 
                     double kdr = p.totalDeaths == 0 ? p.totalKills : ((double) p.totalKills / (double) p.totalDeaths);
