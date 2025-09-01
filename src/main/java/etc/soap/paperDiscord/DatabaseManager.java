@@ -61,6 +61,27 @@ public class DatabaseManager {
         return Optional.empty();
     }
 
+    public Optional<PlayerInfo> getPlayerInfoByUUID(java.util.UUID uuid) {
+        String sql = "SELECT uuid, name, rank, first_join, playtime FROM player WHERE uuid = ? LIMIT 1";
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new PlayerInfo(
+                            rs.getString("uuid"),
+                            rs.getString("name"),
+                            rs.getString("rank"),
+                            rs.getLong("first_join"),
+                            rs.getInt("playtime")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return Optional.empty();
+    }
+
     // Aggregated duels totals
     public Optional<DuelsAggregated> getDuelsAggregatedByName(String name) {
         String sql = "SELECT COALESCE(SUM(kills),0) AS total_kills, COALESCE(SUM(deaths),0) AS total_deaths, " +
@@ -68,6 +89,29 @@ public class DatabaseManager {
                 "FROM duels_kit_stats WHERE name = ?";
         try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new DuelsAggregated(
+                            rs.getInt("total_kills"),
+                            rs.getInt("total_deaths"),
+                            rs.getInt("total_wins"),
+                            rs.getInt("total_losses"),
+                            rs.getInt("best_streak")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return Optional.empty();
+    }
+
+    public Optional<DuelsAggregated> getDuelsAggregatedByUUID(java.util.UUID uuid) {
+        String sql = "SELECT COALESCE(SUM(kills),0) AS total_kills, COALESCE(SUM(deaths),0) AS total_deaths, " +
+                "COALESCE(SUM(wins),0) AS total_wins, COALESCE(SUM(losses),0) AS total_losses, COALESCE(MAX(best_streak),0) AS best_streak " +
+                "FROM duels_kit_stats WHERE uuid = ?";
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, uuid.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
                     return Optional.of(new DuelsAggregated(
