@@ -597,7 +597,9 @@ public class DiscordCommandListener extends ListenerAdapter {
                 event.getHook().sendMessage("No player found with name `" + player + "`.").queue();
                 return;
             }
-            UUID uuid = offline.getUniqueId();
+            final UUID uuid = offline.getUniqueId();
+            final String uuidStr = uuid.toString();
+            final String uuidNoDashes = uuidStr.replace("-", "");
 
             // Query the database asynchronously using the resolved UUID
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -615,14 +617,16 @@ public class DiscordCommandListener extends ListenerAdapter {
                     EmbedBuilder embed = new EmbedBuilder()
                             .setTitle("Stats — " + p.name)
                             .setColor(Color.CYAN)
-                            .addField("UUID", p.uuid, true)
-                            .addField("Duels — K/D/W/L", p.kills + "/" + p.deaths + "/" + p.wins + "/" + p.losses, true)
+                            .setThumbnail("https://crafatar.com/avatars/" + uuidNoDashes + "?overlay")
+                            .setImage("https://crafatar.com/renders/body/" + uuidNoDashes + "?overlay")
+                            .addField("UUID", uuidStr, false)
+                            .addField("Kills / Deaths", p.kills + " / " + p.deaths, true)
+                            .addField("Wins / Losses", p.wins + " / " + p.losses, true)
                             .addField("K/D Ratio", kdrStr, true)
                             .addField("Current Streak", String.valueOf(p.streak), true)
                             .addField("Best Streak", String.valueOf(p.bestStreak), true)
                             .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl())
                             .setTimestamp(Instant.now());
-
 
                     event.getHook().sendMessageEmbeds(embed.build()).queue();
                 } catch (Exception ex) {
