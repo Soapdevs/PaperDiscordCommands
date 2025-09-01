@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+
 public class DatabaseManager {
     private final HikariDataSource ds;
 
@@ -108,6 +109,98 @@ public class DatabaseManager {
             e.printStackTrace();
         }
         return list;
+    }
+
+    /**
+     * Fetch combined player info and duels statistics for the specified player.
+     *
+     * @param name     the player name to query
+     * @param kitLimit maximum number of per-kit records
+     * @return an Optional containing {@link PlayerStats} if the player exists
+     */
+    public Optional<PlayerStats> getPlayerStatsByName(String name, int kitLimit) {
+        Optional<PlayerInfo> infoOpt = getPlayerInfoByName(name);
+        if (infoOpt.isEmpty()) {
+            return Optional.empty();
+        }
+
+        PlayerInfo info = infoOpt.get();
+        DuelsAggregated agg = getDuelsAggregatedByName(name)
+                .orElse(new DuelsAggregated(0, 0, 0, 0, 0));
+        List<DuelsKitStats> rawKits = getDuelsPerKitByName(name, kitLimit);
+
+        List<PlayerStats.DuelsKit> kits = new ArrayList<>();
+        for (DuelsKitStats k : rawKits) {
+            kits.add(new PlayerStats.DuelsKit(k.kit, k.kills, k.deaths, k.wins, k.losses, k.streak, k.bestStreak));
+        }
+
+        PlayerStats stats = new PlayerStats(
+                info.uuid,
+                info.name,
+                info.rank,
+                info.firstJoin,
+                info.playtime,
+                agg.totalKills,
+                agg.totalDeaths,
+                agg.totalWins,
+                agg.totalLosses,
+                agg.bestStreak,
+                kits
+        );
+        return Optional.of(stats);
+    }
+
+    // Simple container classes for internal mapping
+    public static class PlayerInfo {
+        public final String uuid;
+        public final String name;
+        public final String rank;
+        public final long firstJoin;
+        public final int playtime;
+
+        public PlayerInfo(String uuid, String name, String rank, long firstJoin, int playtime) {
+            this.uuid = uuid;
+            this.name = name;
+            this.rank = rank;
+            this.firstJoin = firstJoin;
+            this.playtime = playtime;
+        }
+    }
+
+    public static class DuelsAggregated {
+        public final int totalKills;
+        public final int totalDeaths;
+        public final int totalWins;
+        public final int totalLosses;
+        public final int bestStreak;
+
+        public DuelsAggregated(int totalKills, int totalDeaths, int totalWins, int totalLosses, int bestStreak) {
+            this.totalKills = totalKills;
+            this.totalDeaths = totalDeaths;
+            this.totalWins = totalWins;
+            this.totalLosses = totalLosses;
+            this.bestStreak = bestStreak;
+        }
+    }
+
+    public static class DuelsKitStats {
+        public final String kit;
+        public final int kills;
+        public final int deaths;
+        public final int wins;
+        public final int losses;
+        public final int streak;
+        public final int bestStreak;
+
+        public DuelsKitStats(String kit, int kills, int deaths, int wins, int losses, int streak, int bestStreak) {
+            this.kit = kit;
+            this.kills = kills;
+            this.deaths = deaths;
+            this.wins = wins;
+            this.losses = losses;
+            this.streak = streak;
+            this.bestStreak = bestStreak;
+        }
     }
 
     // expose DataSource if needed
