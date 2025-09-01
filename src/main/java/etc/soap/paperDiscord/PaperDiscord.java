@@ -18,32 +18,29 @@ public class PaperDiscord extends JavaPlugin {
     // We'll store references to our auto-posted messages so we can delete them on shutdown
     private Message embedMessage;
     private Message lastUpdatedMessage;
+    private DatabaseManager dbManager;
 
     @Override
     public void onEnable() {
+        // Ensure config exists before reading values
+        saveDefaultConfig();
 
         dbManager = new DatabaseManager(this);
-        discordCommandListener = new DiscordCommandListener(this, db);
+        discordCommandListener = new DiscordCommandListener(this, dbManager);
         discordCommandListener.startBot();
+        jda = discordCommandListener.getJDA();
 
-        saveDefaultConfig();
-        discordCommandListener = new DiscordCommandListener(this);
-        discordCommandListener.startBot();
-
-        // Delay to allow JDA to initialize before starting updaters
+        // Delay starting of status updaters slightly to ensure bot is ready
         Bukkit.getScheduler().runTaskLater(this, () -> {
             if (jda == null) {
-                jda = discordCommandListener.getJDA();
-            }
-            if (jda != null) {
-                cleanUpOldCommands();
-                startStatusUpdater();
-                // Auto-start the server status embed if enabled in config
-                if (getConfig().getBoolean("server-status.auto-embed", false)) {
-                    startAutoServerStatusEmbedUpdater();
-                }
-            } else {
                 getLogger().severe("Failed to initialize JDA. Status updater will not start.");
+                return;
+            }
+            cleanUpOldCommands();
+            startStatusUpdater();
+            // Auto-start the server status embed if enabled in config
+            if (getConfig().getBoolean("server-status.auto-embed", false)) {
+                startAutoServerStatusEmbedUpdater();
             }
         }, 60L);
     }
@@ -57,7 +54,7 @@ public class PaperDiscord extends JavaPlugin {
         Guild guild = jda.getGuildById(guildId);
         if (guild != null) {
             guild.retrieveCommands().queue(existingCommands -> {
-                List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus", "serverstatusembed", "banformat");
+                List<String> commandsToKeep = List.of("boostperks", "reload", "balancedperks", "steadyperks", "resetperk", "serverstatus", "stats", "serverstatusembed", "banformat");
                 for (net.dv8tion.jda.api.interactions.commands.Command command : existingCommands) {
                     if (!commandsToKeep.contains(command.getName())) {
                         guild.deleteCommandById(command.getId()).queue();
@@ -83,6 +80,11 @@ public class PaperDiscord extends JavaPlugin {
         }
         if (jda != null) {
             jda.shutdown();
+            try {
+                jda.awaitShutdown();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
