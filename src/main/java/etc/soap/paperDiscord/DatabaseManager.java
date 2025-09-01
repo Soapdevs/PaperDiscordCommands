@@ -27,7 +27,6 @@ public class DatabaseManager {
 
         cfg.setJdbcUrl(String.format(
                 "jdbc:mysql://%s:%d/%s?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC",
- beta/fix-code-errors
                 host, port, db));
 
         cfg.setUsername(user);
