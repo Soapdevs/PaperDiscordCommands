@@ -155,31 +155,6 @@ public class DatabaseManager {
         return list;
     }
 
-    public List<DuelsKitStats> getDuelsPerKitByUUID(java.util.UUID uuid, int limit) {
-        String sql = "SELECT kit, kills, deaths, wins, losses, streak, best_streak FROM duels_kit_stats WHERE uuid = ? ORDER BY kills DESC LIMIT ?";
-        List<DuelsKitStats> list = new ArrayList<>();
-        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
-            ps.setString(1, uuid.toString());
-            ps.setInt(2, limit);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    list.add(new DuelsKitStats(
-                            rs.getString("kit"),
-                            rs.getInt("kills"),
-                            rs.getInt("deaths"),
-                            rs.getInt("wins"),
-                            rs.getInt("losses"),
-                            rs.getInt("streak"),
-                            rs.getInt("best_streak")
-                    ));
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return list;
-    }
-
     /**
      * Fetch combined player info and duels statistics for the specified player.
      *
@@ -197,38 +172,6 @@ public class DatabaseManager {
         DuelsAggregated agg = getDuelsAggregatedByName(name)
                 .orElse(new DuelsAggregated(0, 0, 0, 0, 0));
         List<DuelsKitStats> rawKits = getDuelsPerKitByName(name, kitLimit);
-
-        List<PlayerStats.DuelsKit> kits = new ArrayList<>();
-        for (DuelsKitStats k : rawKits) {
-            kits.add(new PlayerStats.DuelsKit(k.kit, k.kills, k.deaths, k.wins, k.losses, k.streak, k.bestStreak));
-        }
-
-        PlayerStats stats = new PlayerStats(
-                info.uuid,
-                info.name,
-                info.rank,
-                info.firstJoin,
-                info.playtime,
-                agg.totalKills,
-                agg.totalDeaths,
-                agg.totalWins,
-                agg.totalLosses,
-                agg.bestStreak,
-                kits
-        );
-        return Optional.of(stats);
-    }
-
-    public Optional<PlayerStats> getPlayerStatsByUUID(java.util.UUID uuid, int kitLimit) {
-        Optional<PlayerInfo> infoOpt = getPlayerInfoByUUID(uuid);
-        if (infoOpt.isEmpty()) {
-            return Optional.empty();
-        }
-
-        PlayerInfo info = infoOpt.get();
-        DuelsAggregated agg = getDuelsAggregatedByUUID(uuid)
-                .orElse(new DuelsAggregated(0, 0, 0, 0, 0));
-        List<DuelsKitStats> rawKits = getDuelsPerKitByUUID(uuid, kitLimit);
 
         List<PlayerStats.DuelsKit> kits = new ArrayList<>();
         for (DuelsKitStats k : rawKits) {
