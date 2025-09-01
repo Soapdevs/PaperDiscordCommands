@@ -18,16 +18,15 @@ public class PaperDiscord extends JavaPlugin {
     // We'll store references to our auto-posted messages so we can delete them on shutdown
     private Message embedMessage;
     private Message lastUpdatedMessage;
+    private DatabaseManager dbManager;
 
     @Override
     public void onEnable() {
+        // Ensure config exists before reading values
+        saveDefaultConfig();
 
         dbManager = new DatabaseManager(this);
-        discordCommandListener = new DiscordCommandListener(this, db);
-        discordCommandListener.startBot();
-
-        saveDefaultConfig();
-        discordCommandListener = new DiscordCommandListener(this);
+        discordCommandListener = new DiscordCommandListener(this, dbManager);
         discordCommandListener.startBot();
 
         // Delay to allow JDA to initialize before starting updaters
