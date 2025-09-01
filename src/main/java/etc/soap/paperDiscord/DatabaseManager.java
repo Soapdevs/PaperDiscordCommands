@@ -8,6 +8,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.Optional;
 
 /**
@@ -75,6 +76,23 @@ public class DatabaseManager {
             e.printStackTrace();
         }
         return Optional.empty();
+    }
+
+    public boolean updatePlayerStat(java.util.UUID uuid, String field, int value) {
+        String[] allowed = {"kills", "deaths", "wins", "losses", "streak", "best_streak"};
+        if (!Arrays.asList(allowed).contains(field)) {
+            return false;
+        }
+
+        String sql = "UPDATE duels SET " + field + " = ? WHERE uuid = ?";
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, value);
+            ps.setString(2, uuid.toString());
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
     }
 
 
