@@ -82,6 +82,8 @@ public class DiscordCommandListener extends ListenerAdapter {
                                 .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
                         Commands.slash("serverstatus", "Check the status of a Minecraft server")
                                 .addOption(OptionType.STRING, "server_ip", "The IP of the server you want to check", false),
+                        Commands.slash("stats", "Show a player's statistics")
+                                .addOption(OptionType.STRING, "player", "The Minecraft player to look up", true),
                         Commands.slash("banformat", "Start the ban appeal process")
                                 .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form"),
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
@@ -121,6 +123,9 @@ public class DiscordCommandListener extends ListenerAdapter {
                 break;
             case "banformat":
                 handleBanFormatCommand(event);
+                break;
+            case "stats":
+                handleStatsCommand(event);
                 break;
             default:
                 event.reply("Unknown command").setEphemeral(true).queue();
