@@ -4,37 +4,33 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
-import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
-import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
-import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
-import net.dv8tion.jda.api.interactions.modals.Modal;
-import net.dv8tion.jda.api.interactions.components.text.TextInput;
-import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
+import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.components.buttons.Button;
-import net.dv8tion.jda.api.interactions.modals.Modal;
-import net.dv8tion.jda.api.interactions.modals.ModalMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
 import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.components.buttons.Button;
+import net.dv8tion.jda.api.interactions.components.text.TextInput;
+import net.dv8tion.jda.api.interactions.components.text.TextInputStyle;
+import net.dv8tion.jda.api.interactions.modals.Modal;
+import net.dv8tion.jda.api.interactions.modals.ModalMapping;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.OfflinePlayer;
 
 import java.awt.*;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 
 public class DiscordCommandListener extends ListenerAdapter {
     private JDA jda; // JDA instance for the bot
@@ -82,8 +78,10 @@ public class DiscordCommandListener extends ListenerAdapter {
                                 .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
                         Commands.slash("serverstatus", "Check the status of a Minecraft server")
                                 .addOption(OptionType.STRING, "server_ip", "The IP of the server you want to check", false),
+                        Commands.slash("stats", "Show a player's statistics")
+                                .addOption(OptionType.STRING, "player", "The Minecraft player to look up", true),
                         Commands.slash("banformat", "Start the ban appeal process")
-                                .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form"),
+                                .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form", true),
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
                 ).queue();
             } else {
@@ -121,6 +119,9 @@ public class DiscordCommandListener extends ListenerAdapter {
                 break;
             case "banformat":
                 handleBanFormatCommand(event);
+                break;
+            case "stats":
+                handleStatsCommand(event);
                 break;
             default:
                 event.reply("Unknown command").setEphemeral(true).queue();
@@ -585,60 +586,45 @@ public class DiscordCommandListener extends ListenerAdapter {
         String player = event.getOption("player").getAsString().trim();
         event.deferReply(false).queue();
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            try {
-                Optional<PlayerStats> opt = db.getPlayerStatsByName(player, 6);
-                if (opt.isEmpty()) {
-                    event.getHook().sendMessage("No player found with name `" + player + "`.").queue();
-                    return;
-                }
-
-                PlayerStats p = opt.get();
-
-                long firstJoin = p.firstJoin;
-                if (firstJoin > 0 && firstJoin < 1_000_000_000_000L) firstJoin *= 1000L;
-                Instant joinInstant = Instant.ofEpochMilli(firstJoin);
-                String joinFormatted = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
-                        .withZone(ZoneId.systemDefault())
-                        .format(joinInstant);
-
-                long seconds = p.playtime;
-                long days = TimeUnit.SECONDS.toDays(seconds);
-                long hours = TimeUnit.SECONDS.toHours(seconds) - TimeUnit.DAYS.toHours(days);
-                long minutes = TimeUnit.SECONDS.toMinutes(seconds) - TimeUnit.HOURS.toMinutes(TimeUnit.SECONDS.toHours(seconds));
-                String playtimeStr = (days > 0 ? (days + "d ") : "") + hours + "h " + minutes + "m";
-
-                double kdr = p.totalDeaths == 0 ? p.totalKills : ((double) p.totalKills / (double) p.totalDeaths);
-                String kdrStr = String.format("%.2f", kdr);
-
-                EmbedBuilder embed = new EmbedBuilder()
-                        .setTitle("Stats — " + p.name)
-                        .setColor(Color.CYAN)
-                        .addField("UUID", p.uuid, true)
-                        .addField("Rank", p.rank == null ? "None" : p.rank, true)
-                        .addField("Joined", joinFormatted, false)
-                        .addField("Playtime", playtimeStr, true)
-                        .addField("Duels — K/D/W/L", p.totalKills + "/" + p.totalDeaths + "/" + p.totalWins + "/" + p.totalLosses, true)
-                        .addField("K/D Ratio", kdrStr, true)
-                        .addField("Best Streak", String.valueOf(p.bestStreak), true)
-                        .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl())
-                        .setTimestamp(Instant.now());
-
-                if (!p.kits.isEmpty()) {
-                    StringBuilder sb = new StringBuilder();
-                    for (PlayerStats.DuelsKit k : p.kits) {
-                        sb.append("**").append(k.kit).append("**: ")
-                                .append(k.kills).append("k / ").append(k.deaths).append("d / ")
-                                .append(k.wins).append("w\n");
-                    }
-                    embed.addField("Top kits", sb.toString(), false);
-                }
-
-                event.getHook().sendMessageEmbeds(embed.build()).queue();
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                event.getHook().sendMessage("An error occurred while fetching stats for `" + player + "`.").queue();
+        // Resolve UUID on the main server thread to match in-game data
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            OfflinePlayer offline = Bukkit.getOfflinePlayer(player);
+            if (offline == null || (!offline.hasPlayedBefore() && !offline.isOnline())) {
+                event.getHook().sendMessage("No player found with name `" + player + "`.").queue();
+                return;
             }
+            UUID uuid = offline.getUniqueId();
+
+            // Query the database asynchronously using the resolved UUID
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    Optional<PlayerStats> opt = db.getPlayerStatsByUUID(uuid);
+                    if (opt.isEmpty()) {
+                        event.getHook().sendMessage("No player found with name `" + player + "`.").queue();
+                        return;
+                    }
+
+                    PlayerStats p = opt.get();
+                    double kdr = p.deaths == 0 ? p.kills : ((double) p.kills / (double) p.deaths);
+                    String kdrStr = String.format("%.2f", kdr);
+
+                    EmbedBuilder embed = new EmbedBuilder()
+                            .setTitle("Stats — " + p.name)
+                            .setColor(Color.CYAN)
+                            .addField("UUID", p.uuid, true)
+                            .addField("Duels — K/D/W/L", p.kills + "/" + p.deaths + "/" + p.wins + "/" + p.losses, true)
+                            .addField("K/D Ratio", kdrStr, true)
+                            .addField("Current Streak", String.valueOf(p.streak), true)
+                            .addField("Best Streak", String.valueOf(p.bestStreak), true)
+                            .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl())
+                            .setTimestamp(Instant.now());
+
+                    event.getHook().sendMessageEmbeds(embed.build()).queue();
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                    event.getHook().sendMessage("An error occurred while fetching stats for `" + player + "`.").queue();
+                }
+            });
         });
     }
 }
