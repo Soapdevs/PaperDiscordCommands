@@ -64,7 +64,6 @@ public class PaperDiscord extends JavaPlugin {
                         "stats",
                         "serverstatusembed",
                         "banformat");
-
                 for (net.dv8tion.jda.api.interactions.commands.Command command : existingCommands) {
                     if (!commandsToKeep.contains(command.getName())) {
                         guild.deleteCommandById(command.getId()).queue();
