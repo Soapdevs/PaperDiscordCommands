@@ -84,6 +84,10 @@ public class DiscordCommandListener extends ListenerAdapter {
                                 .addOption(OptionType.STRING, "server_ip", "The IP of the server you want to check", false),
                         Commands.slash("stats", "Show a player's statistics")
                                 .addOption(OptionType.STRING, "player", "The Minecraft player to look up", true),
+                        Commands.slash("editstats", "Edit a player's statistics")
+                                .addOption(OptionType.STRING, "player", "The Minecraft player to edit", true)
+                                .addOption(OptionType.STRING, "field", "Stat to edit", true)
+                                .addOption(OptionType.INTEGER, "value", "New value", true),
                         Commands.slash("banformat", "Start the ban appeal process")
                                 .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form", true),
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
@@ -127,6 +131,9 @@ public class DiscordCommandListener extends ListenerAdapter {
             case "stats":
                 handleStatsCommand(event);
                 break;
+            case "editstats":
+                handleEditStatsCommand(event);
+                break;
             default:
                 event.reply("Unknown command").setEphemeral(true).queue();
                 break;
@@ -163,6 +170,48 @@ public class DiscordCommandListener extends ListenerAdapter {
         channel.sendMessage(targetMember.getAsMention() + ", please click the button below to fill out your ban appeal form:")
                 .addActionRow(Button.primary(buttonId, "Fill Appeal Form"))
                 .queue();
+    }
+
+    private void handleEditStatsCommand(SlashCommandInteractionEvent event) {
+        String staffRoleId = plugin.getConfig().getString("discord.staffRole");
+        if (staffRoleId == null || staffRoleId.isEmpty() ||
+                event.getMember().getRoles().stream().noneMatch(role -> role.getId().equals(staffRoleId))) {
+            event.reply("You do not have permission to use this command.").setEphemeral(true).queue();
+            return;
+        }
+
+        String player = event.getOption("player").getAsString().trim();
+        String field = event.getOption("field").getAsString().toLowerCase();
+        int value = event.getOption("value").getAsInt();
+
+        List<String> allowed = List.of("kills", "deaths", "wins", "losses", "streak", "best_streak");
+        if (!allowed.contains(field)) {
+            event.reply("Invalid field. Choose one of: kills, deaths, wins, losses, streak, best_streak.")
+                    .setEphemeral(true).queue();
+            return;
+        }
+
+        event.deferReply(true).queue();
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            OfflinePlayer offline = Bukkit.getOfflinePlayer(player);
+            if (offline == null || (!offline.hasPlayedBefore() && !offline.isOnline())) {
+                event.getHook().sendMessage("No player found with name `" + player + "`.").queue();
+                return;
+            }
+            UUID uuid = offline.getUniqueId();
+
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                boolean ok = db.updatePlayerStat(uuid, field, value);
+                if (ok) {
+                    event.getHook().sendMessage(
+                            "Updated " + field + " for `" + player + "` to " + value + ".").queue();
+                } else {
+                    event.getHook().sendMessage(
+                            "Failed to update stats for `" + player + "`.").queue();
+                }
+            });
+        });
     }
 
     @Override
@@ -599,7 +648,6 @@ public class DiscordCommandListener extends ListenerAdapter {
             }
             final UUID uuid = offline.getUniqueId();
             final String uuidStr = uuid.toString();
-            final String uuidNoDashes = uuidStr.replace("-", "");
 
             // Query the database asynchronously using the resolved UUID
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -617,8 +665,8 @@ public class DiscordCommandListener extends ListenerAdapter {
                     EmbedBuilder embed = new EmbedBuilder()
                             .setTitle("Stats — " + p.name)
                             .setColor(Color.CYAN)
-                            .setThumbnail("https://crafatar.com/avatars/" + uuidNoDashes + "?overlay")
-                            .setImage("https://crafatar.com/renders/body/" + uuidNoDashes + "?overlay")
+                            .setThumbnail("https://mc-heads.net/avatar/" + uuidStr)
+                            .setImage("https://mc-heads.net/body/" + uuidStr)
                             .addField("UUID", uuidStr, false)
                             .addField("Kills / Deaths", p.kills + " / " + p.deaths, true)
                             .addField("Wins / Losses", p.wins + " / " + p.losses, true)
