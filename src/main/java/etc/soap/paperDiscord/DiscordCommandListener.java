@@ -88,6 +88,8 @@ public class DiscordCommandListener extends ListenerAdapter {
                                 .addOption(OptionType.STRING, "player", "The Minecraft player to edit", true)
                                 .addOption(OptionType.STRING, "field", "Stat to edit", true)
                                 .addOption(OptionType.INTEGER, "value", "New value", true),
+                        Commands.slash("statsleaderboard", "Show leaderboard for a statistic")
+                                .addOption(OptionType.STRING, "stat", "Stat to sort by (kills, deaths, wins, losses, streak, beststreak)", true),
                         Commands.slash("banformat", "Start the ban appeal process")
                                 .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form", true),
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
@@ -133,6 +135,9 @@ public class DiscordCommandListener extends ListenerAdapter {
                 break;
             case "editstats":
                 handleEditStatsCommand(event);
+                break;
+            case "statsleaderboard":
+                handleStatsLeaderboardCommand(event);
                 break;
             default:
                 event.reply("Unknown command").setEphemeral(true).queue();
@@ -634,6 +639,86 @@ public class DiscordCommandListener extends ListenerAdapter {
             embed.addField("Status", "Offline", true);
         }
         return embed;
+    }
+
+    private void handleStatsLeaderboardCommand(SlashCommandInteractionEvent event) {
+        String statInput = event.getOption("stat").getAsString().trim().toLowerCase();
+        String field;
+        switch (statInput) {
+            case "kills":
+            case "deaths":
+            case "wins":
+            case "losses":
+            case "streak":
+                field = statInput;
+                break;
+            case "beststreak":
+            case "best_streak":
+                field = "best_streak";
+                statInput = "beststreak";
+                break;
+            default:
+                event.reply("Invalid stat type. Use kills, deaths, wins, losses, streak, or beststreak.").setEphemeral(true).queue();
+                return;
+        }
+
+        event.deferReply(false).queue();
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                List<PlayerStats> top = db.getTopPlayers(field, 10);
+                if (top.isEmpty()) {
+                    event.getHook().sendMessage("No data found for stat `" + statInput + "`.").queue();
+                    return;
+                }
+
+                String display = field.replace('_', ' ');
+                StringBuilder titleBuilder = new StringBuilder();
+                for (String part : display.split(" ")) {
+                    if (titleBuilder.length() > 0) titleBuilder.append(' ');
+                    titleBuilder.append(part.substring(0, 1).toUpperCase()).append(part.substring(1));
+                }
+
+                EmbedBuilder embed = new EmbedBuilder()
+                        .setTitle("Top 10 — " + titleBuilder)
+                        .setColor(Color.ORANGE);
+
+                StringBuilder desc = new StringBuilder();
+                int rank = 1;
+                for (PlayerStats p : top) {
+                    int value;
+                    switch (field) {
+                        case "kills":
+                            value = p.kills;
+                            break;
+                        case "deaths":
+                            value = p.deaths;
+                            break;
+                        case "wins":
+                            value = p.wins;
+                            break;
+                        case "losses":
+                            value = p.losses;
+                            break;
+                        case "streak":
+                            value = p.streak;
+                            break;
+                        case "best_streak":
+                            value = p.bestStreak;
+                            break;
+                        default:
+                            value = 0;
+                    }
+                    desc.append(rank).append(". ").append(p.name).append(" - ").append(value).append('\n');
+                    rank++;
+                }
+                embed.setDescription(desc.toString());
+
+                event.getHook().sendMessageEmbeds(embed.build()).queue();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                event.getHook().sendMessage("An error occurred while fetching leaderboard.").queue();
+            }
+        });
     }
     private void handleStatsCommand(SlashCommandInteractionEvent event) {
         String player = event.getOption("player").getAsString().trim();
