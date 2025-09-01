@@ -9,6 +9,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -95,6 +98,42 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * Fetch the top players ordered by the specified field.
+     * Only allows certain fields to prevent SQL injection.
+     */
+    public List<PlayerStats> getTopPlayers(String field, int limit) {
+        String[] allowed = {"kills", "deaths", "wins", "losses", "streak", "best_streak"};
+        if (!Arrays.asList(allowed).contains(field)) {
+            return Collections.emptyList();
+        }
+
+        String sql = "SELECT uuid, name, COALESCE(kills,0) AS kills, COALESCE(deaths,0) AS deaths, " +
+                     "COALESCE(wins,0) AS wins, COALESCE(losses,0) AS losses, COALESCE(streak,0) AS streak, " +
+                     "COALESCE(best_streak,0) AS best_streak FROM duels ORDER BY " + field + " DESC LIMIT ?";
+
+        List<PlayerStats> list = new ArrayList<>();
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new PlayerStats(
+                            rs.getString("uuid"),
+                            rs.getString("name"),
+                            rs.getInt("kills"),
+                            rs.getInt("deaths"),
+                            rs.getInt("wins"),
+                            rs.getInt("losses"),
+                            rs.getInt("streak"),
+                            rs.getInt("best_streak")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
 
     public DataSource getDataSource() {
         return ds;

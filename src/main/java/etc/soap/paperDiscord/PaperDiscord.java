@@ -62,6 +62,7 @@ public class PaperDiscord extends JavaPlugin {
                         "resetperk",
                         "serverstatus",
                         "stats",
+                        "statsleaderboard",
                         "serverstatusembed",
                         "banformat");
                 for (net.dv8tion.jda.api.interactions.commands.Command command : existingCommands) {
