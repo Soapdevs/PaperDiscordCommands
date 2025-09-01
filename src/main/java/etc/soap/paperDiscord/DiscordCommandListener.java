@@ -84,7 +84,7 @@ public class DiscordCommandListener extends ListenerAdapter {
                         Commands.slash("stats", "Show a player's statistics")
                                 .addOption(OptionType.STRING, "player", "The Minecraft player to look up", true),
                         Commands.slash("banformat", "Start the ban appeal process")
-                                .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form"),
+                                .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form", true),
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
                 ).queue();
             } else {
@@ -619,6 +619,7 @@ public class DiscordCommandListener extends ListenerAdapter {
                     long seconds = p.playtime;
                     long days = TimeUnit.SECONDS.toDays(seconds);
                     long hours = TimeUnit.SECONDS.toHours(seconds) - TimeUnit.DAYS.toHours(days);
+
                     long minutes = TimeUnit.SECONDS.toMinutes(seconds) - TimeUnit.HOURS.toMinutes(TimeUnit.SECONDS.toHours(seconds));
                     String playtimeStr = (days > 0 ? (days + "d ") : "") + hours + "h " + minutes + "m";
 
