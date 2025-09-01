@@ -666,8 +666,6 @@ public class DiscordCommandListener extends ListenerAdapter {
                             .setTitle("Stats — " + p.name)
                             .setColor(Color.CYAN)
                             .setThumbnail("https://mc-heads.net/avatar/" + uuidStr)
-                            .setImage("https://mc-heads.net/body/" + uuidStr)
-                            .addField("UUID", uuidStr, false)
                             .addField("Kills / Deaths", p.kills + " / " + p.deaths, true)
                             .addField("Wins / Losses", p.wins + " / " + p.losses, true)
                             .addField("K/D Ratio", kdrStr, true)
