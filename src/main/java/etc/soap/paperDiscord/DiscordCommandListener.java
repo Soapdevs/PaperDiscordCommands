@@ -26,10 +26,14 @@ import org.bukkit.OfflinePlayer;
 
 import java.awt.*;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.UUID;
 
 public class DiscordCommandListener extends ListenerAdapter {
@@ -618,6 +622,7 @@ public class DiscordCommandListener extends ListenerAdapter {
                             .addField("Best Streak", String.valueOf(p.bestStreak), true)
                             .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl())
                             .setTimestamp(Instant.now());
+
 
                     event.getHook().sendMessageEmbeds(embed.build()).queue();
                 } catch (Exception ex) {
