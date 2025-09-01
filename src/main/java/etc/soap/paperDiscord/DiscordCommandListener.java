@@ -28,9 +28,13 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.awt.*;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 public class DiscordCommandListener extends ListenerAdapter {
     private JDA jda; // JDA instance for the bot
@@ -38,12 +42,12 @@ public class DiscordCommandListener extends ListenerAdapter {
     private final Map<String, Boolean> usedBoostPerksMap = new HashMap<>();
     private final Map<String, Boolean> usedBalancedPerksMap = new HashMap<>();
     private final Map<String, Boolean> usedSteadyPerksMap = new HashMap<>();
-
     private final Map<String, BanAppealData> pendingBanAppeals = new HashMap<>();
 
-
-    public DiscordCommandListener(JavaPlugin plugin) {
+    private final DatabaseManager db;              // <-- store DB manager
+    public DiscordCommandListener(JavaPlugin plugin, DatabaseManager db) {
         this.plugin = plugin;
+        this.db = db;
     }
 
     // Public getter for JDA instance
@@ -576,5 +580,65 @@ public class DiscordCommandListener extends ListenerAdapter {
             embed.addField("Status", "Offline", true);
         }
         return embed;
+    }
+    private void handleStatsCommand(SlashCommandInteractionEvent event) {
+        String player = event.getOption("player").getAsString().trim();
+        event.deferReply(false).queue();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                Optional<PlayerStats> opt = db.getPlayerStatsByName(player, 6);
+                if (opt.isEmpty()) {
+                    event.getHook().sendMessage("No player found with name `" + player + "`.").queue();
+                    return;
+                }
+
+                PlayerStats p = opt.get();
+
+                long firstJoin = p.firstJoin;
+                if (firstJoin > 0 && firstJoin < 1_000_000_000_000L) firstJoin *= 1000L;
+                Instant joinInstant = Instant.ofEpochMilli(firstJoin);
+                String joinFormatted = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                        .withZone(ZoneId.systemDefault())
+                        .format(joinInstant);
+
+                long seconds = p.playtime;
+                long days = TimeUnit.SECONDS.toDays(seconds);
+                long hours = TimeUnit.SECONDS.toHours(seconds) - TimeUnit.DAYS.toHours(days);
+                long minutes = TimeUnit.SECONDS.toMinutes(seconds) - TimeUnit.HOURS.toMinutes(TimeUnit.SECONDS.toHours(seconds));
+                String playtimeStr = (days > 0 ? (days + "d ") : "") + hours + "h " + minutes + "m";
+
+                double kdr = p.totalDeaths == 0 ? p.totalKills : ((double) p.totalKills / (double) p.totalDeaths);
+                String kdrStr = String.format("%.2f", kdr);
+
+                EmbedBuilder embed = new EmbedBuilder()
+                        .setTitle("Stats — " + p.name)
+                        .setColor(Color.CYAN)
+                        .addField("UUID", p.uuid, true)
+                        .addField("Rank", p.rank == null ? "None" : p.rank, true)
+                        .addField("Joined", joinFormatted, false)
+                        .addField("Playtime", playtimeStr, true)
+                        .addField("Duels — K/D/W/L", p.totalKills + "/" + p.totalDeaths + "/" + p.totalWins + "/" + p.totalLosses, true)
+                        .addField("K/D Ratio", kdrStr, true)
+                        .addField("Best Streak", String.valueOf(p.bestStreak), true)
+                        .setFooter("Requested by " + event.getUser().getName(), event.getUser().getAvatarUrl())
+                        .setTimestamp(Instant.now());
+
+                if (!p.kits.isEmpty()) {
+                    StringBuilder sb = new StringBuilder();
+                    for (PlayerStats.DuelsKit k : p.kits) {
+                        sb.append("**").append(k.kit).append("**: ")
+                                .append(k.kills).append("k / ").append(k.deaths).append("d / ")
+                                .append(k.wins).append("w\n");
+                    }
+                    embed.addField("Top kits", sb.toString(), false);
+                }
+
+                event.getHook().sendMessageEmbeds(embed.build()).queue();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                event.getHook().sendMessage("An error occurred while fetching stats for `" + player + "`.").queue();
+            }
+        });
     }
 }

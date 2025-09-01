@@ -21,6 +21,11 @@ public class PaperDiscord extends JavaPlugin {
 
     @Override
     public void onEnable() {
+
+        dbManager = new DatabaseManager(this);
+        discordCommandListener = new DiscordCommandListener(this, db);
+        discordCommandListener.startBot();
+
         saveDefaultConfig();
         discordCommandListener = new DiscordCommandListener(this);
         discordCommandListener.startBot();
@@ -68,6 +73,8 @@ public class PaperDiscord extends JavaPlugin {
     public void onDisable() {
         getLogger().info("Removing Discord Link.");
         // Delete auto-posted messages if they exist
+        if (dbManager != null) dbManager.shutdown();
+
         if (embedMessage != null) {
             embedMessage.delete().queue();
         }

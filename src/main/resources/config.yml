@@ -22,3 +22,10 @@ server-status:
   timeout-seconds: 5
   auto-embed: true            # When true, auto-posts and updates embed on startup.
   channel-id: "DISCORD_CHANNEL_ID"  # The text channel ID where the auto-embed should be posted.
+mysql:
+  host: "127.0.0.1"
+  port: 3306
+  database: "minecraft"
+  user: "youruser"
+  password: "yourpass"
+  pool-size: 4

@@ -1,5 +1,8 @@
 package etc.soap.paperDiscord;
 
+/**
+ * Temporarily stores part 1 of the ban appeal while the user completes part 2
+ */
 public class BanAppealData {
     public final String minecraftUsername;
     public final String dateOfBan;

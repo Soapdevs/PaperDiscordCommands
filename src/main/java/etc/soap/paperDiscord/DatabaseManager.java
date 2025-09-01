@@ -1,0 +1,115 @@
+package etc.soap.paperDiscord;
+
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
+
+import javax.sql.DataSource;
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+public class DatabaseManager {
+    private final HikariDataSource ds;
+
+    public DatabaseManager(org.bukkit.plugin.java.JavaPlugin plugin) {
+        HikariConfig cfg = new HikariConfig();
+        String host = plugin.getConfig().getString("mysql.host", "127.0.0.1");
+        int port = plugin.getConfig().getInt("mysql.port", 3306);
+        String db = plugin.getConfig().getString("mysql.database", "minecraft");
+        String user = plugin.getConfig().getString("mysql.user", "root");
+        String pass = plugin.getConfig().getString("mysql.password", "");
+        int pool = plugin.getConfig().getInt("mysql.pool-size", 4);
+
+        cfg.setJdbcUrl(String.format("jdbc:mysql://%s:%d/%s?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC", host, port, db));
+        cfg.setUsername(user);
+        cfg.setPassword(pass);
+        cfg.setMaximumPoolSize(pool);
+        cfg.setMinimumIdle(1);
+        cfg.setPoolName("PaperDiscordPool");
+        cfg.addDataSourceProperty("cachePrepStmts", "true");
+        cfg.addDataSourceProperty("prepStmtCacheSize", "250");
+        cfg.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+
+        ds = new HikariDataSource(cfg);
+    }
+
+    public void shutdown() {
+        if (ds != null && !ds.isClosed()) ds.close();
+    }
+
+    // Player table
+    public Optional<PlayerInfo> getPlayerInfoByName(String name) {
+        String sql = "SELECT uuid, name, rank, first_join, playtime FROM player WHERE name = ? LIMIT 1";
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new PlayerInfo(
+                            rs.getString("uuid"),
+                            rs.getString("name"),
+                            rs.getString("rank"),
+                            rs.getLong("first_join"),
+                            rs.getInt("playtime")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return Optional.empty();
+    }
+
+    // Aggregated duels totals
+    public Optional<DuelsAggregated> getDuelsAggregatedByName(String name) {
+        String sql = "SELECT COALESCE(SUM(kills),0) AS total_kills, COALESCE(SUM(deaths),0) AS total_deaths, " +
+                "COALESCE(SUM(wins),0) AS total_wins, COALESCE(SUM(losses),0) AS total_losses, COALESCE(MAX(best_streak),0) AS best_streak " +
+                "FROM duels_kit_stats WHERE name = ?";
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, name);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return Optional.of(new DuelsAggregated(
+                            rs.getInt("total_kills"),
+                            rs.getInt("total_deaths"),
+                            rs.getInt("total_wins"),
+                            rs.getInt("total_losses"),
+                            rs.getInt("best_streak")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return Optional.empty();
+    }
+
+    // Per-kit breakdown (limit parameter)
+    public List<DuelsKitStats> getDuelsPerKitByName(String name, int limit) {
+        String sql = "SELECT kit, kills, deaths, wins, losses, streak, best_streak FROM duels_kit_stats WHERE name = ? ORDER BY kills DESC LIMIT ?";
+        List<DuelsKitStats> list = new ArrayList<>();
+        try (Connection c = ds.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, name);
+            ps.setInt(2, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    list.add(new DuelsKitStats(
+                            rs.getString("kit"),
+                            rs.getInt("kills"),
+                            rs.getInt("deaths"),
+                            rs.getInt("wins"),
+                            rs.getInt("losses"),
+                            rs.getInt("streak"),
+                            rs.getInt("best_streak")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    // expose DataSource if needed
+    public DataSource getDataSource() { return ds; }
+}
