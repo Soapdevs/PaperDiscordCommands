@@ -28,21 +28,19 @@ public class PaperDiscord extends JavaPlugin {
         dbManager = new DatabaseManager(this);
         discordCommandListener = new DiscordCommandListener(this, dbManager);
         discordCommandListener.startBot();
+        jda = discordCommandListener.getJDA();
 
-        // Delay to allow JDA to initialize before starting updaters
+        // Delay starting of status updaters slightly to ensure bot is ready
         Bukkit.getScheduler().runTaskLater(this, () -> {
             if (jda == null) {
-                jda = discordCommandListener.getJDA();
-            }
-            if (jda != null) {
-                cleanUpOldCommands();
-                startStatusUpdater();
-                // Auto-start the server status embed if enabled in config
-                if (getConfig().getBoolean("server-status.auto-embed", false)) {
-                    startAutoServerStatusEmbedUpdater();
-                }
-            } else {
                 getLogger().severe("Failed to initialize JDA. Status updater will not start.");
+                return;
+            }
+            cleanUpOldCommands();
+            startStatusUpdater();
+            // Auto-start the server status embed if enabled in config
+            if (getConfig().getBoolean("server-status.auto-embed", false)) {
+                startAutoServerStatusEmbedUpdater();
             }
         }, 60L);
     }
@@ -82,6 +80,11 @@ public class PaperDiscord extends JavaPlugin {
         }
         if (jda != null) {
             jda.shutdown();
+            try {
+                jda.awaitShutdown();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
