@@ -62,6 +62,7 @@ public class PaperDiscord extends JavaPlugin {
                         "resetperk",
                         "serverstatus",
                         "stats",
+                        "editstats",
                         "statsleaderboard",
                         "serverstatusembed",
                         "banformat");
