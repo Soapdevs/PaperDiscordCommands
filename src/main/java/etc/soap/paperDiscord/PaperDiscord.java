@@ -18,15 +18,13 @@ public class PaperDiscord extends JavaPlugin {
     // We'll store references to our auto-posted messages so we can delete them on shutdown
     private Message embedMessage;
     private Message lastUpdatedMessage;
-    private DatabaseManager dbManager;
 
     @Override
     public void onEnable() {
         // Ensure config exists before reading values
         saveDefaultConfig();
 
-        dbManager = new DatabaseManager(this);
-        discordCommandListener = new DiscordCommandListener(this, dbManager);
+        discordCommandListener = new DiscordCommandListener(this);
         discordCommandListener.startBot();
         jda = discordCommandListener.getJDA();
 
@@ -55,17 +53,8 @@ public class PaperDiscord extends JavaPlugin {
         if (guild != null) {
             guild.retrieveCommands().queue(existingCommands -> {
                 List<String> commandsToKeep = List.of(
-                        "boostperks",
-                        "reload",
-                        "balancedperks",
-                        "steadyperks",
-                        "resetperk",
                         "serverstatus",
-                        "stats",
-                        "editstats",
-                        "statsleaderboard",
-                        "serverstatusembed",
-                        "banformat");
+                        "serverstatusembed");
                 for (net.dv8tion.jda.api.interactions.commands.Command command : existingCommands) {
                     if (!commandsToKeep.contains(command.getName())) {
                         guild.deleteCommandById(command.getId()).queue();
@@ -81,8 +70,6 @@ public class PaperDiscord extends JavaPlugin {
     public void onDisable() {
         getLogger().info("Removing Discord Link.");
         // Delete auto-posted messages if they exist
-        if (dbManager != null) dbManager.shutdown();
-
         if (embedMessage != null) {
             embedMessage.delete().queue();
         }

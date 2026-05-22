@@ -2,18 +2,8 @@
 discord:
   ownerID: "654646115072737303"
   status: "Your Custom Status Here"
-  staffRole: "STAFF_ROLE_ID"              # Role ID for staff allowed to use /banformat
   token: "YOUR_DISCORD_BOT_TOKEN"
   guild-id: "YOUR_GUILD_ID"
-  boostperks:
-    allowedRole: "YOUR_REQUIRED_ROLE_ID"
-    minecraftCommand: "give {name} minecraft:diamond 1"
-  balancedperks:
-    allowedRole: "YOUR_REQUIRED_ROLE_ID"
-    minecraftCommand: "give {name} minecraft:diamond 1"
-  steadyperks:
-    allowedRole: "YOUR_REQUIRED_ROLE_ID"
-    minecraftCommand: "give {name} minecraft:diamond 1"
 
 # Server status configuration (used by /serverstatus and /serverstatusembed)
 server-status:
@@ -22,10 +12,3 @@ server-status:
   timeout-seconds: 5
   auto-embed: true            # When true, auto-posts and updates embed on startup.
   channel-id: "DISCORD_CHANNEL_ID"  # The text channel ID where the auto-embed should be posted.
-mysql:
-  host: "127.0.0.1"
-  port: 3306
-  database: "minecraft"
-  user: "youruser"
-  password: "yourpass"
-  pool-size: 4
