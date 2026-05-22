@@ -132,10 +132,12 @@ public class DiscordCommandListener extends ListenerAdapter {
 
     public EmbedBuilder buildServerStatusEmbed(ServerStatus status, String serverIp) {
         String iconUrl = "https://eu.mc-api.net/v3/server/favicon/" + serverIp;
+        Color onlineColor = parseColor(plugin.getConfig().getString("server-status.embed-colors.online"), Color.GREEN);
+        Color offlineColor = parseColor(plugin.getConfig().getString("server-status.embed-colors.offline"), Color.RED);
         EmbedBuilder embed = new EmbedBuilder()
                 .setTitle("Minecraft Server Status")
                 .setThumbnail(iconUrl)
-                .setColor(status.isOnline() ? Color.GREEN : Color.RED)
+                .setColor(status.isOnline() ? onlineColor : offlineColor)
                 .addField("Server IP", serverIp, true);
 
         if (status.isOnline()) {
@@ -146,5 +148,20 @@ public class DiscordCommandListener extends ListenerAdapter {
             embed.addField("Status", "Offline", true);
         }
         return embed;
+    }
+
+    private Color parseColor(String rawColor, Color fallback) {
+        if (rawColor == null || rawColor.isBlank()) {
+            return fallback;
+        }
+        String normalized = rawColor.trim();
+        if (!normalized.startsWith("#")) {
+            normalized = "#" + normalized;
+        }
+        try {
+            return Color.decode(normalized);
+        } catch (NumberFormatException ignored) {
+            return fallback;
+        }
     }
 }
