@@ -71,27 +71,8 @@ public class DiscordCommandListener extends ListenerAdapter {
             Guild guild = jda.getGuildById(plugin.getConfig().getString("discord.guild-id"));
             if (guild != null) {
                 guild.updateCommands().addCommands(
-                        Commands.slash("boostperks", "Give perks to a Minecraft player.")
-                                .addOption(OptionType.STRING, "name", "The Minecraft player to receive the perks."),
-                        Commands.slash("balancedperks", "Give balanced perks to a Minecraft player.")
-                                .addOption(OptionType.STRING, "name", "The Minecraft player to receive the balanced perks."),
-                        Commands.slash("steadyperks", "Give steady perks to a Minecraft player.")
-                                .addOption(OptionType.STRING, "name", "The Minecraft player to receive the steady perks."),
-                        Commands.slash("resetperk", "Reset perks for a player.")
-                                .addOption(OptionType.STRING, "perk", "The type of perk to reset (booster/balanced/steady).")
-                                .addOption(OptionType.USER, "user", "The Discord user whose perk should be reset."),
                         Commands.slash("serverstatus", "Check the status of a Minecraft server")
                                 .addOption(OptionType.STRING, "server_ip", "The IP of the server you want to check", false),
-                        Commands.slash("stats", "Show a player's statistics")
-                                .addOption(OptionType.STRING, "player", "The Minecraft player to look up", true),
-                        Commands.slash("editstats", "Edit a player's statistics")
-                                .addOption(OptionType.STRING, "player", "The Minecraft player to edit", true)
-                                .addOption(OptionType.STRING, "field", "Stat to edit", true)
-                                .addOption(OptionType.INTEGER, "value", "New value", true),
-                        Commands.slash("statsleaderboard", "Show leaderboard for a statistic")
-                                .addOption(OptionType.STRING, "stat", "Stat to sort by (kills, deaths, wins, losses, streak, beststreak)", true),
-                        Commands.slash("banformat", "Start the ban appeal process")
-                                .addOption(OptionType.USER, "user", "The Discord user to invite to fill out the ban appeal form", true),
                         Commands.slash("serverstatusembed", "Send a server status embed that updates every 30 seconds")
                 ).queue();
             } else {
@@ -106,38 +87,11 @@ public class DiscordCommandListener extends ListenerAdapter {
     @Override
     public void onSlashCommandInteraction(SlashCommandInteractionEvent event) {
         switch (event.getName()) {
-            case "boostperks":
-                handleBoostPerksCommand(event);
-                break;
-            case "balancedperks":
-                handleBalancedPerksCommand(event);
-                break;
-            case "steadyperks":
-                handleSteadyPerksCommand(event);
-                break;
-            case "resetperk":
-                handleResetPerkCommand(event);
-                break;
-            case "reload":
-                handleReloadCommand(event);
-                break;
             case "serverstatus":
                 handleServerStatusCommand(event);
                 break;
             case "serverstatusembed":
                 handleServerStatusEmbedCommand(event);
-                break;
-            case "banformat":
-                handleBanFormatCommand(event);
-                break;
-            case "stats":
-                handleStatsCommand(event);
-                break;
-            case "editstats":
-                handleEditStatsCommand(event);
-                break;
-            case "statsleaderboard":
-                handleStatsLeaderboardCommand(event);
                 break;
             default:
                 event.reply("Unknown command").setEphemeral(true).queue();
